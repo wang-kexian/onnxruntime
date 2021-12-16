@@ -10,11 +10,11 @@
 namespace onnxruntime {
 namespace contrib {
 
-ONNX_OPERATOR_KERNEL_EX(ATenOp, kMSDomain, 1, kCpuExecutionProvider,
+ONNX_OPERATOR_KERNEL_EX(ATen, kPytorchAtenDomain, 1, kCpuExecutionProvider,
                         KernelDefBuilder().TypeConstraint("T", DataTypeImpl::AllTensorAndSequenceTensorTypes()),
-                        ATenOp);
+                        ATen);
 
-Status ATenOp::Compute(OpKernelContext* p_ctx) const {
+Status ATen::Compute(OpKernelContext* p_ctx) const {
   auto* p_ctx_internal = static_cast<OpKernelContextInternal*>(p_ctx);
   std::vector<DLManagedTensor*> dlpacks;
   for (int i = 0; i < p_ctx_internal->InputCount(); i++) {

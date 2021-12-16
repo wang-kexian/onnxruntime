@@ -171,7 +171,7 @@ struct ProviderHostCPUImpl : ProviderHostCPU {
 #endif
 
 #ifdef ENABLE_TRAINING
-  Status ATenOp__Compute(const contrib::ATenOp* p, OpKernelContext* p_ctx) override { return p->ATenOp::Compute(p_ctx); }
+  Status ATenOp__Compute(const contrib::ATen* p, OpKernelContext* p_ctx) override { return p->ATen::Compute(p_ctx); }
   void contrib__record_event_in_tensor(const Tensor& event_id_tensor) override { return contrib::record_event_in_tensor(event_id_tensor); }
   void contrib__wait_event_in_tensor(const Tensor& event_id_tensor) override { return contrib::wait_event_in_tensor(event_id_tensor); }
   Status contrib__Group__Compute(const contrib::Group* p, OpKernelContext* context) override { return p->Group::Compute(context); }

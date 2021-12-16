@@ -8,10 +8,10 @@
 namespace onnxruntime {
 namespace contrib {
 
-class ATenOp : public OpKernel {
+class ATen : public OpKernel {
  public:
-  ATenOp(const OpKernelInfo& info) : OpKernel(info) {
-    ORT_THROW_IF_ERROR(info.GetAttr("name", &op_name_));
+  ATen(const OpKernelInfo& info) : OpKernel(info) {
+    ORT_THROW_IF_ERROR(info.GetAttr("operator_name", &op_name_));
     overload_name_ = info.GetAttrOrDefault<std::string>("overload_name", "");
   }
 

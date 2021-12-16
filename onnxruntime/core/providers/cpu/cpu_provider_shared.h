@@ -129,7 +129,7 @@ struct ProviderHostCPU {
 #endif
 
 #ifdef ENABLE_TRAINING
-  virtual Status ATenOp__Compute(const contrib::ATenOp* p, OpKernelContext* p_ctx) = 0;
+  virtual Status ATenOp__Compute(const contrib::ATen* p, OpKernelContext* p_ctx) = 0;
   virtual void contrib__record_event_in_tensor(const Tensor& event_id_tensor) = 0;
   virtual void contrib__wait_event_in_tensor(const Tensor& event_id_tensor) = 0;
   virtual Status contrib__Group__Compute(const contrib::Group* p, OpKernelContext* context) = 0;
