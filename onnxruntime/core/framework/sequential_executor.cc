@@ -15,6 +15,10 @@
 #include "core/framework/op_kernel_context_internal.h"
 #include "core/framework/utils.h"
 
+#ifdef USE_CUDA
+#include <cuda.h>
+#endif
+
 #if defined DEBUG_NODE_INPUTS_OUTPUTS
 #include "core/framework/debug_node_inputs_outputs_utils.h"
 #endif
@@ -364,6 +368,9 @@ Status SequentialExecutor::Execute(const SessionState& session_state, const std:
                 << "\n";
 #endif
 
+#ifdef USE_CUDA
+      cudaDeviceSynchronize();
+#endif
       session_state.Profiler().EndTimeAndRecordEvent(profiling::NODE_EVENT,
                                                      node_name_for_profiling + "_kernel_time",
                                                      kernel_begin_time,

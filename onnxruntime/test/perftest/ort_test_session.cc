@@ -399,9 +399,10 @@ OnnxRuntimeTestSession::OnnxRuntimeTestSession(Ort::Env& env, std::random_device
     ORT_THROW("This backend is not included in perf test runner.\n");
   }
 
-  if (performance_test_config.run_config.custom_op_lib_path) {
-      Ort::ThrowOnError(Ort::GetApi().RegisterCustomOpsLibrary(
-        session_options, performance_test_config.run_config.custom_op_lib_path, nullptr));
+  if (performance_test_config.run_config.custom_op_lib_path.size() > 0) {
+    void* lib_handle = nullptr;
+    Ort::ThrowOnError(Ort::GetApi().RegisterCustomOpsLibrary(
+      session_options, performance_test_config.run_config.custom_op_lib_path.c_str(), &lib_handle));
   }
 
   if (performance_test_config.run_config.enable_cpu_mem_arena)
