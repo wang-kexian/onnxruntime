@@ -1050,6 +1050,10 @@ if (NOT onnxruntime_ENABLE_TRAINING_TORCH_INTEROP)
     target_link_libraries(onnxruntime_perf_test PRIVATE onnxruntime_language_interop onnxruntime_pyop)
   endif()
 
+  if (onnxruntime_USE_CUDA)
+    target_link_libraries(onnxruntime_perf_test PRIVATE cudart)
+  endif()
+
   if (onnxruntime_USE_TVM)
     if (WIN32)
       target_link_options(onnxruntime_perf_test PRIVATE "/STACK:4000000")

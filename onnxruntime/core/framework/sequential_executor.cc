@@ -16,7 +16,7 @@
 #include "core/framework/utils.h"
 
 #ifdef USE_CUDA
-#include <cuda.h>
+#include "core/providers/cuda/cuda_pch.h"
 #endif
 
 #if defined DEBUG_NODE_INPUTS_OUTPUTS
