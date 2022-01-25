@@ -39,7 +39,7 @@ bool IsATenOperatorExecutorInitialized() {
   return aten_ops::ATenOperatorExecutor::Instance().IsInitialized();
 }
 
-Status ExecuteReduceSumATenOp(OpKernelContext* p_ctx, const gsl::span<const int64_t>& axes, bool keepdims) {
+Status ExecuteReduceSumATen(OpKernelContext* p_ctx, const gsl::span<const int64_t>& axes, bool keepdims) {
   ORT_ENFORCE(aten_ops::ATenOperatorExecutor::Instance().IsInitialized() && !axes.empty());
   std::vector<DLManagedTensor*> dlpacks;
   auto* p_ctx_internal = static_cast<OpKernelContextInternal*>(p_ctx);

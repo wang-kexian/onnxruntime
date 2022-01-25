@@ -1,5 +1,9 @@
 [
     [
+        "ATen org.pytorch.aten CPUExecutionProvider",
+        17173780706992526136
+    ],
+    [
         "AdamOptimizer com.microsoft CPUExecutionProvider",
         13275719513674142848
     ],
