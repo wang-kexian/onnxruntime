@@ -78,56 +78,76 @@ onnxruntime::MLDataType to_ort_scalar_type(
   }
 }
 
-OrtDevice::DeviceId create_ort_device_id(const c10::DeviceIndex device_id) {
-  if (device_id < 0) {
-    return 0;
+//OrtDevice::DeviceId create_ort_device_id(const c10::DeviceIndex device_id) {
+//  if (device_id < 0) {
+//    return 0;
+//  } else {
+//    return static_cast<OrtDevice::DeviceId>(device_id);
+//  }
+//};
+
+
+//OrtDevice create_ort_device(const c10::DeviceType device_type, const c10::DeviceIndex device_id) {
+//    // Assume ID is the same in ORT and Pytorch.
+//    OrtDevice::DeviceId ort_device_id = create_ort_device_id(device_id);
+//    // Translate Pytorch device type to ORT device type.
+//    OrtDevice::DeviceType ort_device_type;
+//    switch (device_type) {
+//        case c10::DeviceType::CPU:
+//            ort_device_type = OrtDevice::CPU;
+//            break;
+//        case c10::DeviceType::CUDA:
+//            ort_device_type = OrtDevice::GPU;
+//            break;
+//        default:
+//        ORT_THROW(
+//          "Unsupport Pytorch device.",
+//          " Type: ", c10::DeviceTypeName(device_type), ",",
+//          " ID: ", device_id);
+//    };
+//
+//    // TODO: check if we should always do OrtAllocatorType::OrtDeviceAllocator.
+//    return OrtDevice(ort_device_type, OrtDevice::MemType::DEFAULT, ort_device_id);
+//}
+
+OrtMemoryInfo create_ort_memory_info(const OrtDevice& device) {
+  // TODO:: check if we should always use OrtAllocatorType::OrtDeviceAllocator.
+  return OrtMemoryInfo("LazyTensor-bridge", OrtAllocatorType::OrtDeviceAllocator, device, device.Id());
+}
+
+//OrtMemoryInfo create_ort_cpu_memory_info(const OrtDevice& device) {
+//  // TODO:: check if we should always use OrtAllocatorType::OrtDeviceAllocator.
+//  return OrtMemoryInfo(name, OrtAllocatorType::OrtDeviceAllocator, device, device.Id());
+//}
+
+// Create OrtDevice from c10::Device.
+OrtDevice create_ort_device(const c10::Device device) {
+  // c10::Device's ID can be negative, which means current device.
+  // Assumptions:
+  //  1. c10::Device::CPU is always indexed by -1.
+  //     Thus, it's mapped to OrtDevice::CPU with index 0.
+  //  2. c10::Device::GPU always has non-negative index.
+  //     If the index is i, it's mapped to OrtDevice::GPU with index i.
+
+  // For each case, assert if our assumptions are true and then do the work.
+  if (device.type() == c10::DeviceType::CPU) {
+    ORT_ENFORCE(device.index() == -1);
+    return OrtDevice(OrtDevice::CPU, OrtDevice::MemType::DEFAULT, 0);
+  } else if (device.type() == c10::DeviceType::CUDA) {
+    ORT_ENFORCE(device.index() >= 0);
+    return OrtDevice(OrtDevice::GPU, OrtDevice::MemType::DEFAULT, device.index());
   } else {
-    return static_cast<OrtDevice::DeviceId>(device_id);
+    ORT_THROW("Unsupport Pytorch c10 device.",
+              " Type: ", c10::DeviceTypeName(device.type()), ",",
+              " ID: ", device.index());
   }
-};
-
-
-OrtDevice create_ort_device(const c10::DeviceType device_type, const c10::DeviceIndex device_id) {
-    // Assume ID is the same in ORT and Pytorch.
-    OrtDevice::DeviceId ort_device_id = create_ort_device_id(device_id);
-    // Translate Pytorch device type to ORT device type.
-    OrtDevice::DeviceType ort_device_type;
-    switch (device_type) {
-        case c10::DeviceType::CPU:
-            ort_device_type = OrtDevice::CPU;
-            break;
-        case c10::DeviceType::CUDA:
-            ort_device_type = OrtDevice::GPU;
-            break;
-        default:
-        ORT_THROW(
-          "Unsupport Pytorch device.",
-          " Type: ", c10::DeviceTypeName(device_type), ",",
-          " ID: ", device_id);
-    };
-
-    // TODO: check if we should always do OrtAllocatorType::OrtDeviceAllocator.
-    return OrtDevice(ort_device_type, OrtDevice::MemType::DEFAULT, ort_device_id);
 }
-
-OrtMemoryInfo create_ort_memory_info(const c10::Device device) {
-    std::string ort_device_name = device.str();
-    const OrtDevice::DeviceId ort_device_id = create_ort_device_id(device.index());
-    OrtDevice ort_device = create_ort_device(device.type(), ort_device_id);
-    return OrtMemoryInfo(
-        ort_device_name.c_str(), OrtAllocatorType::OrtDeviceAllocator, ort_device, ort_device_id);
-}
-
-OrtMemoryInfo create_ort_cpu_memory_info(const char* name) {
-  OrtDevice device(OrtDevice::CPU, OrtDevice::MemType::DEFAULT, 0);
-  return OrtMemoryInfo(name, OrtAllocatorType::OrtDeviceAllocator, device, device.Id());
-}
-
 
 OrtValue create_ort_tensor_value(const at::Tensor& tensor) {
   onnxruntime::MLDataType element_type = to_ort_scalar_type(tensor.scalar_type());
   onnxruntime::TensorShape shape(tensor.sizes().vec());
-  OrtMemoryInfo memory_info = create_ort_memory_info(tensor.device());
+  OrtDevice device = create_ort_device(tensor.device());
+  OrtMemoryInfo memory_info = create_ort_memory_info(device);
   // This tensor's life time is controlled by Pytorch.
   // TODO: consider to let ORT also own that tensor.
   std::unique_ptr<onnxruntime::Tensor> ort_tensor = std::make_unique<onnxruntime::Tensor>(
@@ -142,66 +162,67 @@ OrtValue create_ort_tensor_value(const at::Tensor& tensor) {
   return ort_value;
 }
 
-OrtValue create_ort_scalar_value(const at::Scalar& scalar) {
-  onnxruntime::MLDataType element_type = to_ort_scalar_type(scalar.type());
-  onnxruntime::TensorShape shape({});
-  // This tensor's life time is controlled by Pytorch.
-  // TODO: consider to let ORT also own that tensor.
-  void* data_ptr = nullptr;
-  std::function<void()> data_deleter;
+// OrtValue create_ort_scalar_value(const at::Scalar& scalar) {
+  // onnxruntime::MLDataType element_type = to_ort_scalar_type(scalar.type());
+  // onnxruntime::TensorShape shape({});
+  // // This tensor's life time is controlled by Pytorch.
+  // // TODO: consider to let ORT also own that tensor.
+  // void* data_ptr = nullptr;
+  // std::function<void()> data_deleter;
 
-  switch (scalar.type()) {
-    case at::kFloat: {
-      data_ptr = new float;
-      *reinterpret_cast<float*>(data_ptr) = scalar.toFloat();
-      data_deleter = [=]() {
-        delete reinterpret_cast<float*>(data_ptr);
-      };
-      break;
-    }
-    case at::kDouble: {
-      data_ptr = new double;
-      *reinterpret_cast<double*>(data_ptr) = scalar.toDouble();
-      data_deleter = [=]() {
-        delete reinterpret_cast<double*>(data_ptr);
-      };
-      break;
-    }
-    case at::kBFloat16: {
-      at::BFloat16 valBFloat16 = scalar.toBFloat16();
-      Ort::BFloat16_t *valOrtBFloat16 = reinterpret_cast<Ort::BFloat16_t *>(&valBFloat16);
-      data_ptr = new Ort::BFloat16_t;
-      *reinterpret_cast<Ort::BFloat16_t*>(data_ptr) = *valOrtBFloat16;
-      data_deleter = [=]() {
-        delete reinterpret_cast<Ort::BFloat16_t*>(data_ptr);
-      };
-      break;
-    }
-    default:
-      ORT_THROW("Unsupport aten scalar type: ", scalar.type());
-  }
+  // switch (scalar.type()) {
+    // case at::kFloat: {
+      // data_ptr = new float;
+      // *reinterpret_cast<float*>(data_ptr) = scalar.toFloat();
+      // data_deleter = [=]() {
+        // delete reinterpret_cast<float*>(data_ptr);
+      // };
+      // break;
+    // }
+    // case at::kDouble: {
+      // data_ptr = new double;
+      // *reinterpret_cast<double*>(data_ptr) = scalar.toDouble();
+      // data_deleter = [=]() {
+        // delete reinterpret_cast<double*>(data_ptr);
+      // };
+      // break;
+    // }
+    // case at::kBFloat16: {
+      // at::BFloat16 valBFloat16 = scalar.toBFloat16();
+      // Ort::BFloat16_t *valOrtBFloat16 = reinterpret_cast<Ort::BFloat16_t *>(&valBFloat16);
+      // data_ptr = new Ort::BFloat16_t;
+      // *reinterpret_cast<Ort::BFloat16_t*>(data_ptr) = *valOrtBFloat16;
+      // data_deleter = [=]() {
+        // delete reinterpret_cast<Ort::BFloat16_t*>(data_ptr);
+      // };
+      // break;
+    // }
+    // default:
+      // ORT_THROW("Unsupport aten scalar type: ", scalar.type());
+  // }
 
-  OrtMemoryInfo memory_info = create_ort_cpu_memory_info("at::Scalar on CPU");
-  std::unique_ptr<onnxruntime::Tensor> ort_tensor = std::make_unique<onnxruntime::Tensor>(
-      element_type, shape,
-      data_ptr, memory_info);
+  // OrtMemoryInfo memory_info = create_ort_cpu_memory_info("at::Scalar on CPU");
+  // std::unique_ptr<onnxruntime::Tensor> ort_tensor = std::make_unique<onnxruntime::Tensor>(
+      // element_type, shape,
+      // data_ptr, memory_info);
 
-  std::function<void(void*)> deleter = [=](void* p) {
-   data_deleter();
-   onnxruntime::DataTypeImpl::GetType<onnxruntime::Tensor>()->GetDeleteFunc()(p);
-  };
+  // std::function<void(void*)> deleter = [=](void* p) {
+   // data_deleter();
+   // onnxruntime::DataTypeImpl::GetType<onnxruntime::Tensor>()->GetDeleteFunc()(p);
+  // };
 
-  OrtValue ort_value;
-  ort_value.Init(
-      ort_tensor.release(),
-      onnxruntime::DataTypeImpl::GetType<onnxruntime::Tensor>(),
-      deleter);
-  return ort_value;
-}
+  // OrtValue ort_value;
+  // ort_value.Init(
+      // ort_tensor.release(),
+      // onnxruntime::DataTypeImpl::GetType<onnxruntime::Tensor>(),
+      // deleter);
+  // return ort_value;
+// }
 
 
 c10::ScalarType create_torch_element_type(const onnxruntime::PrimitiveDataTypeBase* elem_type) {
   ORT_ENFORCE(elem_type, "Element type pointer cannot be NULL.");
+  std::cout << "c10::ScalarType create_torch_element_type: " << static_cast<ONNX_NAMESPACE::TensorProto_DataType>(elem_type->GetDataType()) << std::endl;
   switch (static_cast<ONNX_NAMESPACE::TensorProto_DataType>(elem_type->GetDataType())) {
     case onnxruntime::data_types_internal::ToTensorDataType<float>() : {
       return c10::kFloat;  
@@ -209,86 +230,84 @@ c10::ScalarType create_torch_element_type(const onnxruntime::PrimitiveDataTypeBa
     case onnxruntime::data_types_internal::ToTensorDataType<double>() : {
       return c10::kDouble;
     }
+    case onnxruntime::data_types_internal::ToTensorDataType<onnxruntime::MLFloat16>() : {
+      return at::kHalf;
+    }
     case onnxruntime::data_types_internal::ToTensorDataType<onnxruntime::BFloat16>() : {
       return c10::kBFloat16;
+    }
+    case onnxruntime::data_types_internal::ToTensorDataType<bool>() : {
+      return at::kBool;
+    }
+    case onnxruntime::data_types_internal::ToTensorDataType<int16_t>() : {
+      return at::kShort;
+    }
+    case onnxruntime::data_types_internal::ToTensorDataType<int>() : {
+      return at::kInt;
+    }
+    case onnxruntime::data_types_internal::ToTensorDataType<int64_t>() : {
+      return at::kLong;
     }
     default:
       ORT_THROW("Unsupport ORT scalar type.");
   }
 }
 
-c10::DeviceType create_torch_device_type(const OrtDevice::DeviceType& device_type) {
-  switch (device_type) {
-    case OrtDevice::CPU:
-      return c10::DeviceType::CPU;
-    case OrtDevice::GPU:
-      return c10::DeviceType::CUDA;
-    default:
-      ORT_THROW("Unsupport ORT device.");
+c10::Device create_c10_device(const OrtDevice& device) {
+  if (device.Type() == OrtDevice::CPU) {
+    ORT_ENFORCE(device.Id() == 0, "ORT CPU device ID must be 0 but got ", device.Id());
+    return c10::Device(c10::DeviceType::CPU);
+  } else if(device.Type() == OrtDevice::GPU) {
+    ORT_ENFORCE(device.Id() >= 0, "ORT GPU device ID must be >= 0 but got ", device.Id());
+    return c10::Device(c10::DeviceType::CUDA, device.Id());
+  } else {
+    std::string device_str;
+    if (device.Type() == OrtDevice::CPU) {
+      device_str = "CPU";
+    } else if (device.Type() == OrtDevice::GPU) {
+      device_str = "GPU";
+    } else {
+      device_str = "Unknown";
+    }
+    ORT_THROW("Unsupport ORT device: ", device_str, ", ID: ", device.Id());
   }
 }
 
-c10::DeviceIndex create_torch_device_index(const OrtDevice::DeviceId& device_id) {
-  return static_cast<c10::DeviceIndex>(device_id);
+// Extract tensor's shape from onnxruntime::TensorShape as a vector.
+std::vector<int64_t> create_shape_vector(const onnxruntime::TensorShape& shape) {
+  const auto num_dims = shape.NumDimensions();
+  std::vector<int64_t> shape_vec(num_dims);
+  shape.CopyDims(shape_vec.data(), num_dims);
+  return shape_vec;
 }
 
-//at::Tensor create_at_tensor_from_ort_value(OrtValue value)
+// Create at::Tensor from onnxruntime::Tensor and keep
+// onnxruntime::Tensor alive until at::Tensor is dead.
 c10::IValue create_c10_ivalue_tensor(OrtValue value) {
   onnxruntime::Tensor* tensor = value.GetMutable<onnxruntime::Tensor>();
   const OrtDevice& device = tensor->Location().device;
   auto options = torch::TensorOptions()
     .dtype(create_torch_element_type(tensor->DataType()->AsPrimitiveDataType()))
     .layout(torch::kStrided)
-    .device(create_torch_device_type(device.Type()), device.Type() == OrtDevice::CPU ? -1 : create_torch_device_index(device.Id()))
+    .device(create_c10_device(device))
     .requires_grad(false);
 
-  const auto num_dims = tensor->Shape().NumDimensions();
-  std::vector<int64_t> shape(num_dims);
-  tensor->Shape().CopyDims(shape.data(), num_dims);
+  std::vector<int64_t> shape = create_shape_vector(tensor->Shape());
 
   at::Tensor new_tensor = torch::from_blob(
     tensor->MutableDataRaw(),
     shape,
+    // Capture-by-value means
+    //  1. A new OrtValue is initialized from "value".
+    //  2. The new OrtValue and "value" share the same underlying tensor, so
+    //     the tensor's lifetime is controlled by both of them, whichever is longer.
+    //  3. The new OrtValue's lifetime is the same as this lambda function.
+    //  4. This lambda function is deleted by "new_tensor"'s dtor, which also ends
+    //     the underlying tensor's life.
     [value] (void*) { },
     options);
 
   return c10::IValue(new_tensor);   
-}
-
-at::Tensor create_at_tensor(onnxruntime::Tensor& tensor) {
-  const OrtDevice& device = tensor.Location().device;
-  auto options = torch::TensorOptions()
-    .dtype(create_torch_element_type(tensor.DataType()->AsPrimitiveDataType()))
-    .layout(torch::kStrided)
-    .device(create_torch_device_type(device.Type()), device.Type() == OrtDevice::CPU ? -1 : create_torch_device_index(device.Id()))
-    .requires_grad(false);
-
-  const auto num_dims = tensor.Shape().NumDimensions();
-  std::vector<int64_t> shape(num_dims);
-  tensor.Shape().CopyDims(shape.data(), num_dims);
-  at::Tensor new_tensor = torch::empty(shape, options);
-
-  switch (device.Type()) {
-    case OrtDevice::CPU: {
-      std::memcpy(new_tensor.data_ptr(), tensor.DataRaw(), tensor.SizeInBytes());
-      // Create a at::Tensor from onnxruntime::Tensor.
-      // std::shared_ptr<onnxruntime::Tensor> ptr = std::make_shared<onnxruntime::Tensor>(std::move(tensor));
-      // new_tensor = torch::from_blob(
-      //   ptr->MutableDataRaw(),
-      //   shape,
-      //   [&ptr] (void*) { ptr.reset(); },
-      //   options);
-      break;
-    }
-    // TODO: Add GPU.
-    case OrtDevice::GPU: {
-      cudaMemcpy(new_tensor.data_ptr(), tensor.DataRaw(), tensor.SizeInBytes(), cudaMemcpyDeviceToDevice);
-      break;
-    }
-    default:
-      ORT_THROW("Unsupport ORT device.");
-  }
-  return new_tensor;
 }
 
 bool Accelerator::supported(const torch::jit::Node* node) {
@@ -325,7 +344,6 @@ void Accelerator::run(torch::jit::Stack& stack) {
   torch::jit::CompleteArgumentSpec spec{false, at::ArrayRef<c10::IValue>(inputs)};
   if (cache_.find(spec) == cache_.end()) {
     cache_[spec] = compile(spec, inputs);
-    //cached_sess_.emplace(spec, std::move(sess));
   }
 
   // Run the compiled function!
@@ -392,9 +410,10 @@ std::unique_ptr<onnxruntime::training::TrainingSession> Accelerator::create_sess
 
 static OrtDevice CheckAndGetTensorDevice(at::ArrayRef<c10::IValue>& values) {
   // This memory info must be shared by all tensors;
-  // for example, all tensors on CPU or all on GPU 1.
+  // for example, all tensors on CPU or all on a specific GPU.
   // When all values are not tensors, we assume CPU device.
-  c10::Device unique_tensor_device(c10::DeviceType::CPU, -1);
+  // c10::Device's index is default to -1.
+  c10::Device unique_tensor_device(c10::DeviceType::CPU);
   bool assigned = false;
   for (auto value : values) {
     if (!value.isTensor()) {
@@ -402,14 +421,17 @@ static OrtDevice CheckAndGetTensorDevice(at::ArrayRef<c10::IValue>& values) {
     }
     auto tensor = value.toTensor();
     if (assigned) {
+      // A device has been recorded, so we compare
+      // it with the current tensor's device. 
       TORCH_CHECK(unique_tensor_device == tensor.device(),
         "All tensors must be on the same device.");
     } else {
+      // Record the 1st tensor device.
       unique_tensor_device = tensor.device();
       assigned = true;
     }
   }
-  return create_ort_device(unique_tensor_device.type(), unique_tensor_device.index());
+  return create_ort_device(unique_tensor_device);
 }
 
 CompiledCode Accelerator::compile(
@@ -458,7 +480,8 @@ CompiledCode Accelerator::compile(
           feeds.push_back(create_ort_tensor_value(inputs.at(i).toTensor()));
         } else {
           // TODO: handle other type correctly.
-          feeds.push_back(create_ort_scalar_value(inputs.at(i).toScalar()));
+          ORT_THROW("Only tensor inputs are supported.");
+          //feeds.push_back(create_ort_scalar_value(inputs.at(i).toScalar()));
         }
     }
 
@@ -469,10 +492,6 @@ CompiledCode Accelerator::compile(
     std::vector<c10::IValue> outputs;
     for (auto value : fetches) {
         outputs.push_back(std::move(create_c10_ivalue_tensor(value)));
-        //onnxruntime::Tensor* tensor = value.GetMutable<onnxruntime::Tensor>();
-        //std::cout << "ORT output device: " << tensor->Location().device.Type() << std::endl;
-        //at::Tensor new_tensor = create_at_tensor(*tensor);
-        //outputs.push_back(new_tensor);
     }
 
     return outputs;
