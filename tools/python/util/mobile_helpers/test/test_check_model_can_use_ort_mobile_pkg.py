@@ -66,12 +66,12 @@ class TestMobilePackageModelChecker(unittest.TestCase):
 
             # Model uses opset 11 which is not supported in the mobile package. Update to supported opset first
             # Note: Ideally this would use update_onnx_opset however the ONNX opset update tools isn't working with
-            # that at the moment. For the sake of this test do a manual update. As the spec hasn't changed for the
-            # operators in the model this is safe.
+            # that at the moment (fix on ONNX side is pending).
+            # For the sake of this test do a manual update. As the spec hasn't changed for the operators in the model
+            # this is safe.
             # from ...onnx_model_utils import update_onnx_opset
             # model = update_onnx_opset(model_path, 13, logger=logger)
             # model = shape_inference.infer_shapes(model, strict_mode=True)
-
             model = self.open_model(model_path)
             model.opset_import[0].version = 13
 
