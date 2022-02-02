@@ -46,25 +46,27 @@ def update_onnx_opset(model_path: pathlib.Path, opset: int, out_path: pathlib.Pa
     Model is saved to the original location with the '.onnx' extension replaced with '.opset<opset>.onnx'.
     :param model_path: Path to model to update
     :param opset: Opset to update model to
-    :param out_path: Optional output path for updated model. If not provided will write to the model_path with the
-                     '.onnx' extension replaced by '.opset<opset>.onnx'. e.g. model.onnx updated to opset 13 will be
-                     written to model.opset13.onnx.
+    :param out_path: Optional output path for updated model.
     :param logger: Optional logger for diagnostic output
+    :returns: Updated onnx.ModelProto
     """
 
+    model_path_str = str(model_path.resolve(strict=True))
     if logger:
-        logger.info("Updating %s to opset %d", model_path, opset)
+        logger.info("Updating %s to opset %d", model_path_str, opset)
 
-    model = onnx.load(str(model_path))
+    model = onnx.load(model_path_str)
     new_model = version_converter.convert_version(model, opset)
-    # save with .onnx -> .opsetX.onnx
-    if not out_path:
-        out_path = str(model_path.with_suffix(f'.opset{opset}.onnx'))
 
-    onnx.save(new_model, out_path)
+    # # save with .onnx -> .opsetX.onnx
+    # if not out_path:
+    #     out_path = str(model_path.with_suffix(f'.opset{opset}.onnx'))
+    if out_path:
+        onnx.save(new_model, str(out_path))
+        if logger:
+            logger.info("Saved updated model to %s", model_path)
 
-    if logger:
-        logger.info("Saved updated model to %s", model_path)
+    return new_model
 
 
 def optimize_model(model_path: pathlib.Path,

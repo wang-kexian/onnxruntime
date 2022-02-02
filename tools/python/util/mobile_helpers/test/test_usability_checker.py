@@ -2,13 +2,14 @@ import logging
 import pathlib
 from testfixtures import LogCapture
 import unittest
-from .usability_checker import analyze_model
+from ..usability_checker import analyze_model
 
 # example usage from <ort root>/tools/python
-# python -m unittest util/mobile_helpers/test_usability_checker.py
+# python -m unittest util/mobile_helpers/test/test_usability_checker.py
+# NOTE: at least on Windows you must use that as the working directory for all the imports to be happy
 
 script_dir = pathlib.Path(__file__).parent
-ort_root = script_dir.parents[3]
+ort_root = script_dir.parents[4]
 
 skip_optimize = False
 

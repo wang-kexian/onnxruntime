@@ -1,7 +1,11 @@
 import torch
 import unittest
 
-from .pytorch_export_helpers import infer_input_info, export_module
+from ..pytorch_export_helpers import infer_input_info, export_module
+
+# example usage from <ort root>/tools/python
+# python -m unittest util/test/test_pytorch_export_helpers.py
+# NOTE: at least on Windows you must use that as the working directory for all the imports to be happy
 
 
 class TestModel(torch.nn.Module):

@@ -5,8 +5,7 @@
 # This script is a stub that uses the model conversion script from the util subdirectory.
 # We do it this way so we can use relative imports in that script, which makes it easy to include
 # in the ORT python package (where it must use relative imports)
-from util.ort_mobile_model_helpers import analyze_model
-
+from util.mobile_helpers import analyze_model
 
 if __name__ == '__main__':
     analyze_model()

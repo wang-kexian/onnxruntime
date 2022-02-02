@@ -6,11 +6,15 @@ from onnx import helper
 from onnx import shape_inference
 from onnx import TensorProto
 
-from .onnx_model_utils import get_producer_consumer_maps, make_dim_param_fixed, make_input_shape_fixed
-from .mobile_helpers.usability_checker import check_shapes
+from ..onnx_model_utils import get_producer_consumer_maps, make_dim_param_fixed, make_input_shape_fixed
+from ..mobile_helpers.usability_checker import check_shapes
 
 script_dir = pathlib.Path(__file__).parent
-ort_root = script_dir.parents[2]
+ort_root = script_dir.parents[3]
+
+# example usage from <ort root>/tools/python
+# python -m unittest util/test/test_onnx_model_utils.py
+# NOTE: at least on Windows you must use that as the working directory for all the imports to be happy
 
 
 class TestGetProducerConsumerMaps(unittest.TestCase):

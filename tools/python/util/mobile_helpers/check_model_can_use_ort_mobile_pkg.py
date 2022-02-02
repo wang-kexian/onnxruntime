@@ -5,12 +5,14 @@
 # would be supported by the pre-built ORT Mobile package.
 
 import argparse
+import logging
 import onnx
 import os
 import pathlib
 import sys
 from onnx import shape_inference
-from util import reduced_build_config_parser
+from ..reduced_build_config_parser import parse_config
+
 
 cpp_to_tensorproto_type = {
     'float': 1,
@@ -34,7 +36,7 @@ cpp_to_tensorproto_type = {
 tensorproto_type_to_cpp = {v: k for k, v in cpp_to_tensorproto_type.items()}
 
 
-def check_graph(graph, opsets, required_ops, global_types, special_types, unsupported_ops):
+def check_graph(graph, opsets, required_ops, global_types, special_types, unsupported_ops, logger):
     '''
     Check the graph and any subgraphs for usage of types or operators which we know are not supported.
     :param graph: Graph to process.
@@ -45,6 +47,7 @@ def check_graph(graph, opsets, required_ops, global_types, special_types, unsupp
                           are not guaranteed to be. We would need to add a lot of infrastructure to know for sure so
                           currently we treat them as supported.
     :param unsupported_ops: Set of unsupported operators that is updated as they are found and returned to the caller.
+    :param logger: Logger for diagnostic output.
     :return: Returns whether the graph uses unsupported operators or types.
     '''
     has_unsupported_types = False
@@ -52,16 +55,16 @@ def check_graph(graph, opsets, required_ops, global_types, special_types, unsupp
 
     def _is_type_supported(value_info, description):
         is_supported = True
-        type_name = i.type.WhichOneof('value')
+        type_name = value_info.type.WhichOneof('value')
         if type_name == 'tensor_type':
-            t = i.type.tensor_type.elem_type
+            t = value_info.type.tensor_type.elem_type
             if t not in global_types and t not in special_types:
                 cpp_type = tensorproto_type_to_cpp[t]
-                print(f'Data type {cpp_type} of {description} is not supported.')
+                logger.debug(f'Element type {cpp_type} of {description} is not supported.')
                 is_supported = False
         else:
             # we don't support sequences, map, sparse tensors, or optional types in the pre-built package
-            print(f'Data type {type_name} of {description} is not supported.')
+            logger.debug(f'Data type {type_name} of {description} is not supported.')
             is_supported = False
 
         return is_supported
@@ -88,8 +91,8 @@ def check_graph(graph, opsets, required_ops, global_types, special_types, unsupp
         if not _input_output_is_supported(i, 'input'):
             has_unsupported_types = True
 
-    for i in graph.output:
-        if not _input_output_is_supported(i, 'output'):
+    for o in graph.output:
+        if not _input_output_is_supported(o, 'output'):
             has_unsupported_types = True
 
     for node in graph.node:
@@ -115,18 +118,19 @@ def check_graph(graph, opsets, required_ops, global_types, special_types, unsupp
         # recurse into subgraph for control flow nodes (Scan/Loop/If)
         for attr in node.attribute:
             if attr.HasField('g'):
-                check_graph(attr.g, opsets, required_ops, global_types, special_types, unsupported_ops)
+                check_graph(attr.g, opsets, required_ops, global_types, special_types, unsupported_ops, logger)
 
     return has_unsupported_types or unsupported_ops
 
 
-def _get_global_tensorproto_types(op_type_impl_filter):
+def _get_global_tensorproto_types(op_type_impl_filter, logger: logging.Logger):
     '''
     Map the globally supported types (C++) to onnx.TensorProto.DataType values used in the model
     See https://github.com/onnx/onnx/blob/1faae95520649c93ae8d0b403816938a190f4fa7/onnx/onnx.proto#L485
 
     Additionally return a set of types we special case as being able to generally be considered as supported.
     :param op_type_impl_filter: type filter from reduced build configuration parser
+    :param logger: Logger
     :return: tuple of globally enabled types and special cased types
     '''
     global_cpp_types = op_type_impl_filter.global_type_list()
@@ -136,7 +140,7 @@ def _get_global_tensorproto_types(op_type_impl_filter):
         if t in cpp_to_tensorproto_type:
             global_onnx_tensorproto_types.add(cpp_to_tensorproto_type[t])
         else:
-            print(f'Error: Unexpected data type of {t}')
+            logger.error(f"Error: Unexpected data type of {t} in package build config's globally enabled types.")
             sys.exit(-1)
 
     # a subset of operators require int32 and int64 to always be enabled, as those types are used for dimensions in
@@ -149,6 +153,62 @@ def _get_global_tensorproto_types(op_type_impl_filter):
                      cpp_to_tensorproto_type['bool']]
 
     return global_onnx_tensorproto_types, special_types
+
+
+def check_model_supported_by_mobile_package(model_with_type_info: onnx.ModelProto,
+                                            mobile_pkg_build_config: pathlib.Path,
+                                            logger: logging.Logger):
+    '''
+    Check if an ONNX model will be able to be used with the ORT Mobile pre-built package.
+    :param model_with_type_info: ONNX model that has had ONNX shape inferencing run on to add type/shape information.
+    :param mobile_pkg_build_config: Configuration file used to build the ORT Mobile package.
+    :param logger: Logger for output
+    :return: True if supported
+    '''
+    enable_type_reduction = True
+    required_ops, op_type_impl_filter = parse_config(str(mobile_pkg_build_config), enable_type_reduction)
+    global_onnx_tensorproto_types, special_types = _get_global_tensorproto_types(op_type_impl_filter, logger)
+
+    # get the opset imports
+    opsets = {}
+    for entry in model_with_type_info.opset_import:
+        # if empty it's ai.onnx
+        domain = entry.domain or 'ai.onnx'
+        opsets[domain] = entry.version
+
+    # If the ONNX opset of the model is not supported we can recommend using our tools to update that first.
+    supported_onnx_opsets = set(required_ops['ai.onnx'].keys())
+    # we have a contrib op that is erroneously in the ai.onnx domain with opset 1. manually remove that incorrect value
+    supported_onnx_opsets.remove(1)
+    onnx_opset_model_uses = opsets['ai.onnx']
+    if onnx_opset_model_uses not in supported_onnx_opsets:
+        logger.info(f'Model uses ONNX opset {onnx_opset_model_uses}.')
+        logger.info(f'The pre-built package only supports ONNX opsets {sorted(supported_onnx_opsets)}.')
+        logger.info(f'Please try updating the ONNX model opset to a supported version using '
+                    'python -m onnxruntime.util.onnx_model_utils.update_onnx_opset ')
+
+        return False
+
+    unsupported_ops = set()
+    logger.debug('Checking if the data types and operators used in the model are supported '
+                 'in the pre-built ORT package...')
+    unsupported = check_graph(model_with_type_info.graph, opsets, required_ops,
+                              global_onnx_tensorproto_types, special_types,
+                              unsupported_ops, logger)
+
+    if unsupported_ops:
+        logger.info('Unsupported operators:')
+        for entry in sorted(unsupported_ops):
+            logger.info('  ' + entry)
+
+    if unsupported:
+        logger.info('\nModel is not supported by the pre-built package due to unsupported types or operators.')
+        logger.info('Please see https://onnxruntime.ai/docs/reference/mobile/prebuilt-package/ for further details.')
+    else:
+        logger.info('Model is most likely supported. '
+                    'Note that this check is not comprehensive so testing to validate is still required.')
+
+    return not unsupported
 
 
 def main():
@@ -183,36 +243,9 @@ def main():
     # type/shape info for all ops.
     model_with_type_info = shape_inference.infer_shapes(model)
 
-    # get type reduction and required ops from pre-built package config
-    # we assume type reduction is enabled as that's what we use for our builds
-    enable_type_reduction = True
-    required_ops, op_type_impl_filter = reduced_build_config_parser.parse_config(config_file, enable_type_reduction)
-    global_onnx_tensorproto_types, special_types = _get_global_tensorproto_types(op_type_impl_filter)
-
-    # get the opset imports
-    opsets = {}
-    for entry in model.opset_import:
-        # if empty it's ai.onnx
-        domain = entry.domain or 'ai.onnx'
-        opsets[domain] = entry.version
-
-    unsupported_ops = set()
-    print('Checking if the data types and operators used in the model are supported in the pre-built ORT package...\n')
-    unsupported = check_graph(model_with_type_info.graph, opsets, required_ops,
-                              global_onnx_tensorproto_types, special_types,
-                              unsupported_ops)
-
-    if unsupported_ops:
-        print(' Unsupported operators:')
-        for entry in sorted(unsupported_ops):
-            print('  ' + entry)
-
-    if unsupported:
-        print('\nModel is not supported by the pre-built package due to unsupported types or operators.')
-        print('Please see https://onnxruntime.ai/docs/reference/mobile/prebuilt-package/ for further details.')
-    else:
-        print('Model is most likely supported. '
-              'Note that this check is not comprehensive so testing to validate is still required.')
+    logger = logging.getLogger('default')
+    logger.setLevel(logging.INFO)
+    check_model_supported_by_mobile_package(model_with_type_info, config_file, logger)
 
 
 if __name__ == '__main__':

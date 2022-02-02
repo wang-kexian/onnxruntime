@@ -366,13 +366,17 @@ file(GLOB onnxruntime_python_datasets_data CONFIGURE_DEPENDS
     "${ONNXRUNTIME_ROOT}/python/datasets/*.onnx"
 )
 
-# Files needed to convert ONNX model to ORT format
+# Files needed to convert ONNX model to ORT format and to analyze model for suitability in mobile scenarios
 set(onnxruntime_ort_format_model_conversion_srcs
     ${REPO_ROOT}/tools/python/util/convert_onnx_models_to_ort.py
     ${REPO_ROOT}/tools/python/util/logger.py
+    ${REPO_ROOT}/tools/python/util/pytorch_export_helpers.py
+    ${REPO_ROOT}/tools/python/util/onnx_model_utils.py
 )
 file(GLOB onnxruntime_ort_format_model_srcs CONFIGURE_DEPENDS
-    ${REPO_ROOT}/tools/python/util/ort_format_model/*.py)
+    ${REPO_ROOT}/tools/python/util/mobile_helpers/*.py
+    ${REPO_ROOT}/tools/python/util/ort_format_model/*.py
+)
 
 set(build_output_target onnxruntime_common)
 if(NOT onnxruntime_ENABLE_STATIC_ANALYSIS)

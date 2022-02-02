@@ -8,6 +8,7 @@ from collections import deque
 from enum import Enum
 from ..onnx_model_utils import get_producer_consumer_maps, optimize_model, \
     iterate_graph_per_graph_func, iterate_graph_per_node_func, is_fixed_size_tensor
+import check_model_can_use_ort_mobile_pkg
 
 
 class _SupportedOpsChecker:
@@ -512,4 +513,4 @@ def run_analyze_model():
 
 
 if __name__ == '__main__':
-    analyze_model()
+    run_analyze_model()
