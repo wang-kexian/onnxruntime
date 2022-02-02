@@ -8,6 +8,7 @@ import typing
 
 import onnxruntime as ort
 from .ort_format_model import create_config_from_models
+from .onnx_model_utils import get_optimization_level
 
 
 def _path_match_suffix_ignore_case(path: typing.Union[pathlib.Path, str], suffix: str):
@@ -60,7 +61,7 @@ def _convert(model_path_or_dir: pathlib.Path, optimization_level_str: str, use_n
              custom_op_library: pathlib.Path, create_optimized_onnx_model: bool, allow_conversion_failures: bool,
              session_options_config_entries: typing.Dict[str, str]):
 
-    optimization_level = _get_optimization_level(optimization_level_str)
+    optimization_level = get_optimization_level(optimization_level_str)
 
     models = []
     if model_path_or_dir.is_file() and _path_match_suffix_ignore_case(model_path_or_dir, ".onnx"):
@@ -135,21 +136,6 @@ def _convert(model_path_or_dir: pathlib.Path, optimization_level_str: str, use_n
             num_failures += 1
 
     print("Converted {} models. {} failures.".format(len(models), num_failures))
-
-
-def _get_optimization_level(level):
-    if level == 'disable':
-        return ort.GraphOptimizationLevel.ORT_DISABLE_ALL
-    if level == 'basic':
-        # Constant folding and other optimizations that only use ONNX operators
-        return ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
-    if level == 'extended':
-        # Optimizations using custom operators, excluding NCHWc and NHWC layout optimizers
-        return ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
-    if level == 'all':
-        return ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-
-    raise ValueError('Invalid optimization level of ' + level)
 
 
 def parse_args():

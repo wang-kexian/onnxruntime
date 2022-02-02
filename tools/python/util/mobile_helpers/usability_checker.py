@@ -8,7 +8,6 @@ from collections import deque
 from enum import Enum
 from ..onnx_model_utils import get_producer_consumer_maps, optimize_model, \
     iterate_graph_per_graph_func, iterate_graph_per_node_func, is_fixed_size_tensor
-import check_model_can_use_ort_mobile_pkg
 
 
 class _SupportedOpsChecker:
@@ -128,7 +127,7 @@ class PartitioningInfo:
             # for group in supported_groups:
             #     logger.debug(f'Nodes in group: {",".join([f"{node.name}:{node.op_type}" for node in group])}')
             if self.unsupported_ops:
-                logger.debug(f'Unsupported ops: {",".join(sorted(self.unsupported_ops))}')
+                logger.info(f'Unsupported ops: {",".join(sorted(self.unsupported_ops))}')
 
             caveats = self.supported_ops_checker.get_caveats()
             if caveats:
@@ -336,17 +335,33 @@ def _check_ep_partitioning(model, supported_ops_config, value_info: dict = None)
 
 
 def check_nnapi_partitions(model, value_info: dict = None):
-    # TODO adjust path based on whether this is running from the ORT python package or the repo
-    return _check_ep_partitioning(model,
-                                  r'D:\src\github\ort\tools\ci_build\github\android\nnapi_supported_ops.md',
-                                  value_info)
+    # if we're running in the ORT python package the file should be local. otherwise assume we're running from the
+    # ORT repo
+    script_dir = pathlib.Path(__file__).parent
+    local_config = script_dir / 'nnapi_supported_ops.md'
+    if local_config.exists():
+        config_path = local_config
+    else:
+        ort_root = script_dir.parents[3]
+        config_path = \
+            ort_root / 'tools' / 'ci_build' / 'github' / 'android' / 'nnapi_supported_ops.md'
+
+    return _check_ep_partitioning(model, config_path, value_info)
 
 
 def check_coreml_partitions(model, value_info: dict = None):
-    # TODO adjust path based on whether this is running from the ORT python package or the repo
-    return _check_ep_partitioning(model,
-                                  r'D:\src\github\ort\tools\ci_build\github\apple\coreml_supported_ops.md',
-                                  value_info)
+    # if we're running in the ORT python package the file should be local. otherwise assume we're running from the
+    # ORT repo
+    script_dir = pathlib.Path(__file__).parent
+    local_config = script_dir / 'coreml_supported_ops.md'
+    if local_config.exists():
+        config_path = local_config
+    else:
+        ort_root = script_dir.parents[3]
+        config_path = \
+            ort_root / 'tools' / 'ci_build' / 'github' / 'apple' / 'coreml_supported_ops.md'
+
+    return _check_ep_partitioning(model, config_path, value_info)
 
 
 def check_shapes(graph: onnx.GraphProto, logger: logging.Logger = None):
@@ -417,7 +432,6 @@ def check_shapes(graph: onnx.GraphProto, logger: logging.Logger = None):
 
 
 def checker(model_path, logger: logging.Logger):
-    logger.info(f'Performing checks for {model_path}')
     model = onnx.load(model_path)
     model_with_shape_info = onnx.shape_inference.infer_shapes(model)
 
@@ -451,6 +465,7 @@ def checker(model_path, logger: logging.Logger):
         logger.info(f"Model should perform well with {ep_name} as is: {current_suitability.name}")
 
         if current_suitability != PartitioningInfo.TryWithEP.YES and has_dynamic_shapes:
+            logger.info(f"Checking if model will perform better if the dynamic shapes are fixed.")
             partition_info_with_fixed_shapes = check_nnapi_partitions(model_with_shape_info)
             if logger.getEffectiveLevel() <= logging.DEBUG:
                 # analyze and log detailed info
@@ -460,18 +475,31 @@ def checker(model_path, logger: logging.Logger):
             fixed_shape_suitability = partition_info_with_fixed_shapes.suitability()
             logger.info(f"Model should perform well with {ep_name} if modified to have fixed input shapes: "
                         f"{fixed_shape_suitability.name}")
+            if fixed_shape_suitability != PartitioningInfo.TryWithEP.NO:
+                logger.info('Shapes can be altered using python -m onnxruntime.tools.make_dynamic_shape_fixed')
 
-    check_ep("NNAPI", check_nnapi_partitions)
-    check_ep("CoreML", check_coreml_partitions)
+        return current_suitability != PartitioningInfo.TryWithEP.YES
 
-    logger.info('---------------\n')
+    nnapi_issues = check_ep("NNAPI", check_nnapi_partitions)
+    coreml_issues = check_ep("CoreML", check_coreml_partitions)
+
+    if (nnapi_issues or coreml_issues) and logger.getEffectiveLevel() > logging.DEBUG:
+        logger.info('Re-run with log level of DEBUG for more details on the NNAPI/CoreML issues.')
+
+    logger.info('---------------')
 
 
-def analyze_model(model_path: pathlib.Path, skip_optimize: bool, logger: logging.Logger):
+def analyze_model(model_path: pathlib.Path, skip_optimize: bool = False, logger: logging.Logger = None):
+    logger.info(f'Checking usability for {model_path} with ORT Mobile.')
+
     if not skip_optimize:
         model_path = optimize_model(model_path)
 
-    checker(str(model_path), logger)
+    if not logger:
+        logger = logging.getLogger('usability_checker')
+        logger.setLevel(logging.INFO)
+
+    checker(str(model_path.resolve(strict=True)), logger)
 
     if not skip_optimize:
         # remove the optimized version of the model we created

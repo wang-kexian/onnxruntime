@@ -1,7 +1,7 @@
 import torch
 import unittest
 
-from ..pytorch_export_helpers import infer_input_info, export_module
+from ..pytorch_export_helpers import infer_input_info
 
 # example usage from <ort root>/tools/python
 # python -m unittest util/test/test_pytorch_export_helpers.py

@@ -76,8 +76,8 @@ def optimize_model(model_path: pathlib.Path,
     '''
     Optimize an ONNX model using ONNX Runtime to the specified level
     :param model_path: Path to ONNX model
-    :param output_path: Optional output path. If not specified the '.onnx' extention of model_path will be replaced
-                        with '.optimized.onnx'.
+    :param output_path: Optional output path. If not specified the '.onnx' extension of model_path will be replaced
+                        with '.<optimization level>.optimized.onnx'. e.g. '.basic.optimized.onnx'
     :param level: onnxruntime.GraphOptimizationLevel to use. Default is ORT_ENABLE_BASIC.
     :param log_level: Log level. Defaults to Error (3) so we don't get output about unused initializers being removed.
                       Warning (2) or Info (1) may be desirable in some scenarios.
@@ -85,7 +85,7 @@ def optimize_model(model_path: pathlib.Path,
     '''
 
     if not output_path:
-        output_path = model_path.with_suffix('.optimized.onnx')
+        output_path = model_path.with_suffix(".{}.optimized.onnx".format(str(level)))
 
     so = ort.SessionOptions()
     so.optimized_model_filepath = str(output_path)
@@ -93,19 +93,12 @@ def optimize_model(model_path: pathlib.Path,
     so.log_severity_level = log_level
 
     # create session to optimize
-    _ = ort.InferenceSession(str(model_path), so)
+    _ = ort.InferenceSession(str(model_path), so, providers=['CPUExecutionProvider'])
 
     return output_path
 
 
 def _replace_symbolic_dim_value(graph: onnx.GraphProto, **kwargs):
-    '''
-    Iterate all values in the graph, replacing dim_param in a tensor shape with the provided value.
-    :param graph: GraphProto to update
-    :param dim_param: dim_param to set
-    :param value: value to use
-    '''
-
     param_to_replace = kwargs['dim_param']
     value = kwargs['value']
 
@@ -124,11 +117,26 @@ def _replace_symbolic_dim_value(graph: onnx.GraphProto, **kwargs):
     update_dim_values(graph.value_info)
 
 
-def make_dim_param_fixed(graph: onnx.GraphProto, param_name: str, value: int):
+def _make_dim_param_fixed(graph: onnx.GraphProto, param_name: str, value: int):
+    '''
+    Iterate all values in the graph, replacing dim_param in a tensor shape with the provided value.
+    :param graph: GraphProto to update
+    :param dim_param: dim_param to set
+    :param value: value to use
+    '''
     iterate_graph_per_graph_func(graph, _replace_symbolic_dim_value, dim_param=param_name, value=value)
 
 
-def make_input_shape_fixed(graph: onnx.GraphProto, input_name, fixed_shape: [int]):
+def _make_input_shape_fixed(graph: onnx.GraphProto, input_name, fixed_shape: [int]):
+    '''
+    Update the named graph input to set shape to the provided value. This can be used to set unknown dims as well
+    as to replace dim values.
+    If setting the shape replaces a dim_param, apply that update to the rest of the graph and any subgraphs.
+    :param graph: Graph to update
+    :param input_name: Name of graph input to update.
+    :param fixed_shape: Shape to use.
+    '''
+
     for i in graph.input:
         if i.name == input_name:
             if not i.type.HasField("tensor_type"):
@@ -148,7 +156,11 @@ def make_input_shape_fixed(graph: onnx.GraphProto, input_name, fixed_shape: [int
                         raise ValueError(
                             f"Can't replace existing fixed size of {dim.dim_value} with {fixed_shape[idx]} "
                             f"for dimension {idx + 1}")
+                elif dim.HasField('dim_param'):
+                    # replacing a dim_param so have to do that through the entire graph
+                    _make_dim_param_fixed(graph, dim.dim_param, fixed_shape[idx])
                 else:
+                    # replacing an unknown dim
                     dim.Clear()
                     dim.dim_value = fixed_shape[idx]
 
@@ -157,6 +169,19 @@ def make_input_shape_fixed(graph: onnx.GraphProto, input_name, fixed_shape: [int
 
     raise ValueError(f'Input {input_name} was not found in graph inputs. '
                      f'Valid input names are: {",".join([i.name for i in graph.input])}')
+
+
+def make_dynamic_shape_fixed(model_path: pathlib.Path,
+                             output_path: pathlib.Path,
+                             dim_param: str = None, dim_value: int = -1,
+                             input_name: str = None, input_shape: [int] = None):
+    model = onnx.load(str(model_path))
+    if dim_param:
+        _make_dim_param_fixed(model.graph, dim_param, dim_value)
+    else:
+        _make_input_shape_fixed(model.graph, input_name, input_shape)
+
+    onnx.save(model, str(output_path))
 
 
 def _create_producer_consumer_link(node_to_producers: dict, node_to_consumers: dict,
@@ -201,6 +226,10 @@ def _map_node_dependencies(graph: onnx.GraphProto, node_to_producers: dict, node
                 inputs += subgraph_implicit_inputs
 
         for i in inputs:
+            if not i:
+                # missing optional input
+                continue
+
             if is_local_value(i):
                 if i in producers:
                     producer = producers[i]
@@ -242,7 +271,9 @@ def get_producer_consumer_maps(graph: onnx.GraphProto):
     implicit_inputs = _map_node_dependencies(graph, node_to_producers, node_to_consumers)
 
     # top level graph should have no implicit inputs
-    assert(not implicit_inputs)
+    if implicit_inputs:
+        raise ValueError('This appears to be an invalid model with missing inputs of '
+                         f'{",".join(sorted(implicit_inputs))}')
 
     return node_to_producers, node_to_consumers
 
@@ -268,3 +299,19 @@ def is_fixed_size_tensor(value: onnx.ValueInfoProto):
                 break
 
     return is_fixed
+
+
+def get_optimization_level(level):
+    '''Convert string to GraphOptimizationLevel.'''
+    if level == 'disable':
+        return ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+    if level == 'basic':
+        # Constant folding and other optimizations that only use ONNX operators
+        return ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+    if level == 'extended':
+        # Optimizations using custom operators, excluding NCHWc and NHWC layout optimizers
+        return ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
+    if level == 'all':
+        return ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+    raise ValueError('Invalid optimization level of ' + level)

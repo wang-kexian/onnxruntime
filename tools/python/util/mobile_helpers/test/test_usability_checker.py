@@ -103,3 +103,8 @@ class TestAnalyzer(unittest.TestCase):
                 ('default', 'INFO', 'Partition sizes: [4, 4, 7]'),
                 ('default', 'INFO', 'Model should perform well with CoreML as is: NO')
             )
+
+    def test_yolov5(self):
+        model_path = pathlib.Path(r'D:\temp\PTExporterTest\yolo_v5.onnx')
+        logger = _create_logger()
+        analyze_model(model_path, skip_optimize, logger)

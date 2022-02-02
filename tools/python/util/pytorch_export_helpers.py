@@ -98,26 +98,23 @@ def _flatten_module_input(names, args, kwargs):
 
 
 def infer_input_info(module: torch.nn.Module, *inputs, **kwargs):
-    # Assumes model is on CPU. Use `module.to(torch.device('cpu'))` if it isn't
+    '''
+    Infer the input names and order from the arguments used to execute a PyTorch module for usage exporting
+    the model via torch.onnx.export.
+    Assumes model is on CPU. Use `module.to(torch.device('cpu'))` if it isn't.
 
+    Example usage:
+    input_names, inputs_as_tuple = infer_input_info(module, ...)
+    torch.onnx.export(module, inputs_as_type, 'model.onnx', input_names=input_names, output_names=[...], ...)
+
+    :param module: Module
+    :param inputs: Positional inputs
+    :param kwargs: Keyword argument inputs
+    :return: Tuple of ordered input names and input values. These can be used directly with torch.onnx.export as the
+            `input_names` and `inputs` arguments.
+    '''
     module_parameters = inspect.signature(module.forward).parameters.values()
     input_names = _parse_inputs_for_onnx_export(module_parameters, inputs, kwargs)
     inputs_as_tuple = _flatten_module_input(input_names, inputs, kwargs)
 
     return input_names, inputs_as_tuple
-
-
-def export_module(module: torch.nn.Module, inputs: tuple, input_names: list[str], output_names: list[str], filename,
-                  opset=14):
-    # Assumes model is on CPU. Use `module.to(torch.device('cpu'))` if it isn't
-
-    torch.onnx.export(module,
-                      inputs,
-                      filename,
-                      input_names=input_names,
-                      output_names=output_names,
-                      opset_version=opset,
-                      do_constant_folding=False,
-                      training=False,
-                      export_params=True,
-                      keep_initializers_as_inputs=False)

@@ -6,7 +6,7 @@ import unittest
 from onnx import shape_inference
 from testfixtures import LogCapture
 
-from ..check_model_can_use_ort_mobile_pkg import check_model_supported_by_mobile_package
+from ..check_model_can_use_ort_mobile_pkg import run_check, run_check_with_model
 
 # example usage from <ort root>/tools/python
 # python -m unittest util/mobile_helpers/test/test_usability_checker.py
@@ -26,17 +26,11 @@ def _create_logger():
 
 
 class TestMobilePackageModelChecker(unittest.TestCase):
-    @classmethod
-    def open_model(cls, model_path: pathlib.Path):
-        model = onnx.load(str(model_path))
-        return shape_inference.infer_shapes(model)
-
     def test_supported_model(self):
         with LogCapture() as log_capture:
             logger = _create_logger()
             model_path = ort_root / 'onnxruntime' / 'test' / 'testdata' / 'ort_github_issue_4031.onnx'
-            model = self.open_model(model_path)
-            supported = check_model_supported_by_mobile_package(model, ort_package_build_config_filename, logger)
+            supported = run_check(model_path, ort_package_build_config_filename, logger)
             self.assertTrue(supported)
 
             # print(log_capture)
@@ -49,8 +43,7 @@ class TestMobilePackageModelChecker(unittest.TestCase):
         with LogCapture() as log_capture:
             logger = _create_logger()
             model_path = ort_root / 'onnxruntime' / 'test' / 'testdata' / 'mnist.onnx'
-            model = self.open_model(model_path)
-            supported = check_model_supported_by_mobile_package(model, ort_package_build_config_filename, logger)
+            supported = run_check(model_path, ort_package_build_config_filename, logger)
             self.assertFalse(supported)
 
             # print(log_capture)
@@ -72,10 +65,10 @@ class TestMobilePackageModelChecker(unittest.TestCase):
             # from ...onnx_model_utils import update_onnx_opset
             # model = update_onnx_opset(model_path, 13, logger=logger)
             # model = shape_inference.infer_shapes(model, strict_mode=True)
-            model = self.open_model(model_path)
+            model = onnx.load(str(model_path))
             model.opset_import[0].version = 13
-
-            supported = check_model_supported_by_mobile_package(model, ort_package_build_config_filename, logger)
+            model = onnx.shape_inference.infer_shapes(model)
+            supported = run_check_with_model(model, ort_package_build_config_filename, logger)
             self.assertFalse(supported)
 
             # print(log_capture)
