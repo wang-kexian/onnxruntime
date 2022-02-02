@@ -26,23 +26,27 @@ namespace aten = torch::jit::aten;
 namespace prim = torch::jit::prim;
 
 // static variable used to create inference session and training session.
+constexpr std::string env_name = std::string("LTC");
 static std::unique_ptr<onnxruntime::Environment> ltc_env;
-static std::string env_name = std::string("LTC");
 
 onnxruntime::Environment& GetLtcEnv() {
   if (!ltc_env) {
-    ORT_THROW_IF_ERROR(onnxruntime::Environment::Create(std::make_unique<onnxruntime::logging::LoggingManager>(
-                                                  std::make_unique<onnxruntime::logging::CLogSink>(),
-                                                  onnxruntime::logging::Severity::kWARNING, false, onnxruntime::logging::LoggingManager::InstanceType::Temporal,
-                                                  &env_name),
-                                              ltc_env));
+    ORT_THROW_IF_ERROR(
+        onnxruntime::Environment::Create(
+            std::make_unique<onnxruntime::logging::LoggingManager>(
+                std::make_unique<onnxruntime::logging::CLogSink>(),
+                onnxruntime::logging::Severity::kWARNING,
+                false,
+                onnxruntime::logging::LoggingManager::InstanceType::Temporal,
+                &env_name),
+            ltc_env));
   }
   return *ltc_env;
 }
 
 onnxruntime::MLDataType CreateOrtScalarType(
-  at::ScalarType dtype) {
-  switch (dtype){
+    at::ScalarType dtype) {
+  switch (dtype) {
     case at::kFloat:
       return onnxruntime::DataTypeImpl::GetType<float>();
     case at::kDouble:
@@ -111,32 +115,31 @@ OrtValue CreateOrtTensorValue(const at::Tensor& tensor) {
   return ort_value;
 }
 
-c10::ScalarType create_torch_element_type(const onnxruntime::PrimitiveDataTypeBase* elem_type) {
+c10::ScalarType CreateTorchElementType(const onnxruntime::PrimitiveDataTypeBase* elem_type) {
   ORT_ENFORCE(elem_type, "Element type pointer cannot be NULL.");
-  std::cout << "c10::ScalarType create_torch_element_type: " << static_cast<ONNX_NAMESPACE::TensorProto_DataType>(elem_type->GetDataType()) << std::endl;
   switch (static_cast<ONNX_NAMESPACE::TensorProto_DataType>(elem_type->GetDataType())) {
-    case onnxruntime::data_types_internal::ToTensorDataType<float>() : {
-      return c10::kFloat;  
+    case onnxruntime::data_types_internal::ToTensorDataType<float>(): {
+      return c10::kFloat;
     }
-    case onnxruntime::data_types_internal::ToTensorDataType<double>() : {
+    case onnxruntime::data_types_internal::ToTensorDataType<double>(): {
       return c10::kDouble;
     }
-    case onnxruntime::data_types_internal::ToTensorDataType<onnxruntime::MLFloat16>() : {
+    case onnxruntime::data_types_internal::ToTensorDataType<onnxruntime::MLFloat16>(): {
       return at::kHalf;
     }
-    case onnxruntime::data_types_internal::ToTensorDataType<onnxruntime::BFloat16>() : {
+    case onnxruntime::data_types_internal::ToTensorDataType<onnxruntime::BFloat16>(): {
       return c10::kBFloat16;
     }
-    case onnxruntime::data_types_internal::ToTensorDataType<bool>() : {
+    case onnxruntime::data_types_internal::ToTensorDataType<bool>(): {
       return at::kBool;
     }
-    case onnxruntime::data_types_internal::ToTensorDataType<int16_t>() : {
+    case onnxruntime::data_types_internal::ToTensorDataType<int16_t>(): {
       return at::kShort;
     }
-    case onnxruntime::data_types_internal::ToTensorDataType<int>() : {
+    case onnxruntime::data_types_internal::ToTensorDataType<int>(): {
       return at::kInt;
     }
-    case onnxruntime::data_types_internal::ToTensorDataType<int64_t>() : {
+    case onnxruntime::data_types_internal::ToTensorDataType<int64_t>(): {
       return at::kLong;
     }
     default:
@@ -145,7 +148,7 @@ c10::ScalarType create_torch_element_type(const onnxruntime::PrimitiveDataTypeBa
 }
 
 // Translate Ortdevice to c10::Device.
-c10::Device create_c10_device(const OrtDevice& device) {
+c10::Device CreateC10Device(const OrtDevice& device) {
   // Handles CPU, GPU, and throws otherwise.
   switch (device.Type()) {
     case OrtDevice::CPU: {
@@ -156,7 +159,7 @@ c10::Device create_c10_device(const OrtDevice& device) {
     case OrtDevice::GPU: {
       ORT_ENFORCE(device.Id() >= 0, "ORT GPU device ID must be >= 0 but got ", device.Id());
       // c10 GPU can have negative index (means current device),
-      // but only using non-negative index is enough to cover all ORT cases. 
+      // but only using non-negative index is enough to cover all ORT cases.
       return c10::Device(c10::DeviceType::CUDA, device.Id());
     }
     default: {
@@ -175,7 +178,7 @@ c10::Device create_c10_device(const OrtDevice& device) {
 }
 
 // Extract shape from onnxruntime::TensorShape as a vector.
-std::vector<int64_t> create_shape_vector(const onnxruntime::TensorShape& shape) {
+std::vector<int64_t> CreateShapeVector(const onnxruntime::TensorShape& shape) {
   const auto num_dims = shape.NumDimensions();
   std::vector<int64_t> shape_vec(num_dims);
   shape.CopyDims(shape_vec.data(), num_dims);
@@ -184,31 +187,29 @@ std::vector<int64_t> create_shape_vector(const onnxruntime::TensorShape& shape) 
 
 // Create at::Tensor from onnxruntime::Tensor and keep
 // onnxruntime::Tensor alive until at::Tensor is dead.
-c10::IValue create_c10_ivalue_tensor(OrtValue value) {
+c10::IValue CreateC10IvalueTensor(OrtValue value) {
   onnxruntime::Tensor* tensor = value.GetMutable<onnxruntime::Tensor>();
   const OrtDevice& device = tensor->Location().device;
   auto options = torch::TensorOptions()
-    .dtype(create_torch_element_type(tensor->DataType()->AsPrimitiveDataType()))
-    .layout(torch::kStrided)
-    .device(create_c10_device(device))
-    .requires_grad(false);
-
-  std::vector<int64_t> shape = create_shape_vector(tensor->Shape());
+                     .dtype(CreateTorchElementType(tensor->DataType()->AsPrimitiveDataType()))
+                     .layout(torch::kStrided)
+                     .device(CreateC10Device(device))
+                     .requires_grad(false);
 
   at::Tensor new_tensor = torch::from_blob(
-    tensor->MutableDataRaw(),
-    shape,
-    // Capture-by-value means
-    //  1. A new OrtValue is initialized from "value".
-    //  2. The new OrtValue and "value" share the same underlying tensor, so
-    //     the tensor's lifetime is controlled by both of them, whichever is longer.
-    //  3. The new OrtValue's lifetime is the same as this lambda function.
-    //  4. This lambda function is deleted by "new_tensor"'s dtor, which also ends
-    //     the underlying tensor's life.
-    [value] (void*) { },
-    options);
+      tensor->MutableDataRaw(),
+      CreateShapeVector(tensor->Shape()),
+      // Capture-by-value means
+      //  1. A new OrtValue is direct-initialized from "value".
+      //  2. The new OrtValue and "value" share the same underlying tensor, so
+      //     the tensor's lifetime is controlled by both of them, whichever is longer.
+      //  3. The new OrtValue's lifetime is the same as this lambda function.
+      //  4. This lambda function is deleted by "new_tensor"'s dtor, which also ends
+      //     the underlying tensor's life.
+      [value](void*) {},
+      options);
 
-  return c10::IValue(new_tensor);   
+  return c10::IValue(new_tensor);
 }
 
 bool Accelerator::Supported(const torch::jit::Node* node) {
@@ -225,11 +226,11 @@ bool Accelerator::Supported(const torch::jit::Node* node) {
     //case aten::gt:
     //case aten::eq:
     case prim::Constant:
-    //case aten::threshold_backward:
+      //case aten::threshold_backward:
       std::cout << "[compiler.cc] Support " << *node;  //<< std::endl;
       return true;
     default:
-      std::cout << "[compiler.cc] Not support " << *node; //<< std::endl;
+      std::cout << "[compiler.cc] Not support " << *node;  //<< std::endl;
       return false;
   }
 }
@@ -248,11 +249,11 @@ void Accelerator::Run(torch::jit::Stack& stack) {
   // do so now.
   torch::jit::CompleteArgumentSpec spec{false, at::ArrayRef<c10::IValue>(inputs)};
   if (cache_.find(spec) == cache_.end()) {
-    cache_[spec] = Compile(spec, inputs);
+    cache_.emplace(spec, Compile(spec, inputs));
   }
 
   // Run the compiled function!
-  auto outputs = cache_[spec](inputs);
+  auto outputs = cache_[spec].code(inputs);
 
   torch::jit::drop(stack, num_inputs);
 
@@ -263,7 +264,7 @@ void Accelerator::Run(torch::jit::Stack& stack) {
 }
 
 void Accelerator::CheckArgs(
-  const at::ArrayRef<c10::IValue>& inputs) {
+    const at::ArrayRef<c10::IValue>& inputs) {
   // TODO: remove this check.
   TORCH_CHECK(inputs.size(), "Need at least one input.");
   for (const auto& input : inputs) {
@@ -278,14 +279,14 @@ void Accelerator::CheckArgs(
 // TODO: Allow ORT to accept models without
 // input types. Then, we can remove this function.
 void Accelerator::PropagateArgTypes(
-  const at::ArrayRef<c10::IValue>& inputs) {
+    const at::ArrayRef<c10::IValue>& inputs) {
   TORCH_CHECK(subgraph_->inputs().size() == inputs.size(),
-    "Number of provided inputs must match captured sub-graph's schema.");
+              "Number of provided inputs must match captured sub-graph's schema.");
   const auto num_inputs = subgraph_->inputs().size();
   for (size_t i = 0; i < num_inputs; ++i) {
-      auto input_symbol = subgraph_->inputs()[i];
-      auto input_value = inputs[i];
-      input_symbol->setType(input_value.type());
+    auto input_symbol = subgraph_->inputs()[i];
+    auto input_value = inputs[i];
+    input_symbol->setType(input_value.type());
   }
 }
 
@@ -299,8 +300,7 @@ static std::string ExportToOnnx(std::shared_ptr<torch::jit::Graph> graph) {
   // Retrieve Python exporter function.
   pybind11::function export_to_onnx =
       pybind11::reinterpret_borrow<pybind11::function>(
-          pybind11::module::import("torch.onnx.utils").attr("_optimize_graph_1")
-      );
+          pybind11::module::import("torch.onnx.utils").attr("_optimize_graph_1"));
   // Execute Python function.
   auto result = export_to_onnx(graph, ::torch::onnx::OperatorExportTypes::ONNX);
   return result.cast<std::string>();
@@ -330,9 +330,9 @@ static OrtDevice CheckAndGetTensorDevice(at::ArrayRef<c10::IValue>& values) {
     auto tensor = value.toTensor();
     if (assigned) {
       // A device has been recorded, so we compare
-      // it with the current tensor's device. 
+      // it with the current tensor's device.
       TORCH_CHECK(unique_tensor_device == tensor.device(),
-        "All tensors must be on the same device.");
+                  "All tensors must be on the same device.");
     } else {
       // Record the 1st tensor device.
       unique_tensor_device = tensor.device();
@@ -342,20 +342,25 @@ static OrtDevice CheckAndGetTensorDevice(at::ArrayRef<c10::IValue>& values) {
   return CreateOrtDevice(unique_tensor_device);
 }
 
-CompiledCode Accelerator::Compile(
+CompiledObject Accelerator::Compile(
     torch::jit::CompleteArgumentSpec spec, at::ArrayRef<c10::IValue>& args) {
-  CheckArgs(args);
-  PropagateArgTypes(args);
-  std::string model_path = ExportToOnnx(subgraph_);
-  cached_sess_.emplace(spec, CreateSession());
-  onnxruntime::training::TrainingSession& sess = *cached_sess_.at(spec);
+  CompiledObject compiled;
+  // Assign an empty session.
+  compiled.sess = CreateSession();
+  // Let's get the empty session and initialize it.
+  onnxruntime::training::TrainingSession& sess = *compiled.sess;
 
   OrtCUDAProviderOptions provider_options{};
   provider_options.do_copy_in_default_stream = true;
   auto factory = onnxruntime::CreateExecutionProviderFactory_Cuda(&provider_options);
   ORT_THROW_IF_ERROR(sess.RegisterExecutionProvider(factory->CreateProvider()));
 
+  // Export from Pytorch and load ONNX model into session.
+  CheckArgs(args);
+  PropagateArgTypes(args);
+  std::string model_path = ExportToOnnx(subgraph_);
   ORT_THROW_IF_ERROR(sess.Load(model_path));
+
   ORT_THROW_IF_ERROR(sess.Initialize());
 
   onnxruntime::RunOptions run_options;
@@ -375,8 +380,9 @@ CompiledCode Accelerator::Compile(
 
   // This function wraps the function pointer we bound our assembly to
   // Adheres to the CompiledCode interface defined in compiler.h
-  auto compiled_func = [this, spec, run_options, feed_names, fetch_names, fetches_device_info](at::ArrayRef<c10::IValue>& args) {
-    onnxruntime::training::TrainingSession& sess = *cached_sess_.at(spec);
+  auto code = [this, spec, run_options,
+               feed_names, fetch_names,
+               fetches_device_info, &sess](at::ArrayRef<c10::IValue>& args) {
     std::vector<OrtValue> feeds;
     std::vector<OrtValue> fetches;
 
@@ -384,11 +390,13 @@ CompiledCode Accelerator::Compile(
     OrtMemoryInfo tensor_memory_info;
     const auto num_inputs = subgraph_->inputs().size();
     for (size_t i = 0; i < num_inputs; ++i) {
-        if (subgraph_->inputs().at(i)->type()->kind() == c10::TypeKind::TensorType) {
-          feeds.push_back(CreateOrtTensorValue(args.at(i).toTensor()));
-        } else {
-          ORT_THROW("Only tensor inputs are supported.");
-        }
+      if (subgraph_->inputs().at(i)->type()->kind() == c10::TypeKind::TensorType) {
+        feeds.push_back(CreateOrtTensorValue(args.at(i).toTensor()));
+      } else {
+        // Looks like LTC only passes tensors into backend, so we don't care
+        // other types for now.
+        ORT_THROW("Only tensor inputs are supported.");
+      }
     }
 
     std::cout << "[accelerator.cpp] sess.Run" << std::endl;
@@ -397,11 +405,12 @@ CompiledCode Accelerator::Compile(
 
     std::vector<c10::IValue> outputs;
     for (auto value : fetches) {
-        outputs.push_back(std::move(create_c10_ivalue_tensor(value)));
+      outputs.push_back(std::move(CreateC10IvalueTensor(value)));
     }
 
     return outputs;
   };
 
-  return compiled_func;
+  compiled.code = code;
+  return compiled;
 }

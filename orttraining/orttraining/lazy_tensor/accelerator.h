@@ -6,6 +6,14 @@
 using CompiledCode = std::function<std::vector<c10::IValue>(
     at::ArrayRef<c10::IValue>&)>;
 
+struct CompiledObject {
+  // Callable to execute the computation represented by torch::jit::Graph.
+  // It processes tensors across ORT and Pytorch and invokes "sess".
+  CompiledCode code;
+  // Session used in the "code" above.
+  std::unique_ptr<onnxruntime::training::TrainingSession> sess;
+};
+
 class Accelerator {
  public:
   Accelerator(const torch::jit::Node* node)
@@ -17,9 +25,8 @@ class Accelerator {
 
   void CheckArgs(const at::ArrayRef<c10::IValue>& args);
   void PropagateArgTypes(const at::ArrayRef<c10::IValue>& args);
-  CompiledCode Compile(
+  CompiledObject Compile(
     torch::jit::CompleteArgumentSpec spec, at::ArrayRef<c10::IValue>& args);
   std::shared_ptr<torch::jit::Graph> subgraph_;
-  std::unordered_map<torch::jit::CompleteArgumentSpec, CompiledCode> cache_;
-  std::unordered_map<torch::jit::CompleteArgumentSpec, std::unique_ptr<onnxruntime::training::TrainingSession>> cached_sess_;
+  std::unordered_map<torch::jit::CompleteArgumentSpec, CompiledObject> cache_;
 };
