@@ -22,7 +22,7 @@ void register_ort_as_torch_jit_executor() {
   //
   // TODO: Allow single-op fusion in Pytorch so ORT can receive single-op sub-graph.
   torch::jit::RegisterPass pass([accelerator_symbol](std::shared_ptr<torch::jit::Graph>& g) {
-    CustomFuseGraph(g, Accelerator::supported, accelerator_symbol);
+    CustomFuseGraph(g, Accelerator::Supported, accelerator_symbol);
   });
 
   // Define a function to generate actual computation code for a
@@ -37,7 +37,7 @@ void register_ort_as_torch_jit_executor() {
     // for executing the "node". Note that the "node" is a sub-graph.
     auto accelerator = std::make_shared<Accelerator>(node);
     return [accelerator](torch::jit::Stack& stack) {
-      accelerator->run(stack);
+      accelerator->Run(stack);
     };
   };
 

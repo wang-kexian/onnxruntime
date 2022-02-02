@@ -10,17 +10,15 @@ class Accelerator {
  public:
   Accelerator(const torch::jit::Node* node)
       : subgraph_(node->g(torch::jit::attr::Subgraph)) { std::cout << "JIT see\n" << *node << std::endl; }
-  void run(torch::jit::Stack& stack);
-  static bool supported(const torch::jit::Node* node);
+  void Run(torch::jit::Stack& stack);
+  static bool Supported(const torch::jit::Node* node);
 
  private:
 
-  void check_inputs(const at::ArrayRef<c10::IValue>& inputs);
-  void propagate_input_types(const at::ArrayRef<c10::IValue>& inputs);
-  std::string export_to_onnx();
-  std::unique_ptr<onnxruntime::training::TrainingSession> create_session();
-  CompiledCode compile(
-    torch::jit::CompleteArgumentSpec spec, at::ArrayRef<c10::IValue>& inputs);
+  void CheckArgs(const at::ArrayRef<c10::IValue>& args);
+  void PropagateArgTypes(const at::ArrayRef<c10::IValue>& args);
+  CompiledCode Compile(
+    torch::jit::CompleteArgumentSpec spec, at::ArrayRef<c10::IValue>& args);
   std::shared_ptr<torch::jit::Graph> subgraph_;
   std::unordered_map<torch::jit::CompleteArgumentSpec, CompiledCode> cache_;
   std::unordered_map<torch::jit::CompleteArgumentSpec, std::unique_ptr<onnxruntime::training::TrainingSession>> cached_sess_;
