@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+
 import onnx
 import pathlib
 import unittest
@@ -6,7 +9,7 @@ from onnx import helper
 from onnx import shape_inference
 from onnx import TensorProto
 
-from ..onnx_model_utils import get_producer_consumer_maps, _make_dim_param_fixed, _make_input_shape_fixed
+from ..onnx_model_utils import get_producer_consumer_maps, make_dim_param_fixed, make_input_shape_fixed
 from ..mobile_helpers.usability_checker import check_shapes
 
 script_dir = pathlib.Path(__file__).parent
@@ -20,6 +23,7 @@ ort_root = script_dir.parents[3]
 class TestGetProducerConsumerMaps(unittest.TestCase):
     @staticmethod
     def _create_model():
+        # create a model with subgraphs and various types of shadowing
         body = helper.make_graph(
             [
                 # shadow a1 in main graph.
@@ -135,18 +139,19 @@ class TestDynamicDimReplacement(unittest.TestCase):
         '''
         Update a model with a single symbolic input dimension. After replacement run shape inferencing to verify that
         all shapes in the model have fixed sizes.
-        :return:
         '''
         model_path = \
             ort_root / 'onnxruntime' / 'test' / 'testdata' / 'CNTK' / 'test_LSTM.tanh.bidirectional' / 'model.onnx'
 
         model = onnx.load_model(str(model_path))
+        model = shape_inference.infer_shapes(model, True)
+
         dynamic_inputs, num_dynamic_values = check_shapes(model.graph)
         self.assertEqual(len(dynamic_inputs), 1)
         self.assertEqual(dynamic_inputs[0].name, 'Input3')
         self.assertGreater(num_dynamic_values, 0)
 
-        _make_dim_param_fixed(model.graph, 'None', 4)
+        make_dim_param_fixed(model.graph, 'None', 4)
 
         model = shape_inference.infer_shapes(model, True)
         dynamic_inputs, num_dynamic_values = check_shapes(model.graph)
@@ -161,6 +166,8 @@ class TestDynamicDimReplacement(unittest.TestCase):
         model_path = ort_root / 'onnxruntime' / 'test' / 'testdata' / 'gh_issue_9671.onnx'
 
         model = onnx.load_model(str(model_path))
+        model = shape_inference.infer_shapes(model, True)
+
         dynamic_inputs, num_dynamic_values = check_shapes(model.graph)
         self.assertEqual(len(dynamic_inputs), 3)
         self.assertEqual(dynamic_inputs[0].name, 'X1')
@@ -168,34 +175,50 @@ class TestDynamicDimReplacement(unittest.TestCase):
         self.assertEqual(dynamic_inputs[2].name, 'X3')
         self.assertGreater(num_dynamic_values, 0)
 
-        _make_input_shape_fixed(model.graph, 'X1', [2, 2, 4])
-        _make_input_shape_fixed(model.graph, 'X2', [2, 4])
-        _make_input_shape_fixed(model.graph, 'X3', [2, 2, 4])
+        make_input_shape_fixed(model.graph, 'X1', [2, 2, 4])
+        make_input_shape_fixed(model.graph, 'X2', [2, 4])
+        make_input_shape_fixed(model.graph, 'X3', [2, 2, 4])
 
         # and validate the model no longer has dynamic values
         model = shape_inference.infer_shapes(model, True)
         dynamic_inputs, num_dynamic_values = check_shapes(model.graph)
         self.assertFalse(dynamic_inputs)
 
-    def test_invalid_replace_input_shape(self):
-        '''
-        Replace the entire shape for an input. This can be used when the model has inputs with unknown dimensions
-        i.e. the dimension has no value and no symbolic name so it's harder to replace.
-        '''
-        model_path = ort_root / 'onnxruntime' / 'test' / 'testdata' / 'sklearn_bin_voting_classifier_soft.onnx'
+    def test_replace_input_shape_with_dim_params(self):
+        # replace the input shape where the existing shape also has dim_param entries.
+        # in this case we should also iterate the rest of the model and replace other instances
+        # of the dim_param with the new value.
+        model_path = ort_root / 'onnxruntime' / 'test' / 'testdata' / 'fuse_mul_1.onnx'
 
         model = onnx.load_model(str(model_path))
+        model = shape_inference.infer_shapes(model, True)
+
         dynamic_inputs, num_dynamic_values = check_shapes(model.graph)
         self.assertEqual(len(dynamic_inputs), 1)
-        self.assertEqual(dynamic_inputs[0].name, 'input')
-        self.assertGreater(num_dynamic_values, 0)
+        self.assertEqual(dynamic_inputs[0].name, 'X1')
+        # input as well as other values in model have shape ['D'] so check > 1
+        self.assertGreater(num_dynamic_values, 1)
 
-        # first test some invalid usages
+        model = shape_inference.infer_shapes(model, True)
+        # replace X1 shape of ['D'] -> [4]
+        make_input_shape_fixed(model.graph, 'X1', [4])
+
+        # validate the model no longer has dynamic values
+        # we don't run shape_inference here as 'D' is the only dimension in the whole model, and we should have
+        # replaced every instance of it if _make_input_shape_fixed worked as expected.
+        dynamic_inputs, num_dynamic_values = check_shapes(model.graph)
+        self.assertFalse(dynamic_inputs)
+        self.assertEqual(num_dynamic_values, 0)
+
+    def test_invalid_replace_input_shape(self):
+        model_path = ort_root / 'onnxruntime' / 'test' / 'testdata' / 'sklearn_bin_voting_classifier_soft.onnx'
+        model = onnx.load_model(str(model_path))
+        # test some invalid usages
         self.assertRaisesRegex(ValueError, "Rank mismatch. Existing:2 Replacement:3",
-                               _make_input_shape_fixed, model.graph, 'input', [1, 2, 3])
+                               make_input_shape_fixed, model.graph, 'input', [1, 2, 3])
 
         self.assertRaisesRegex(ValueError, "Can't replace existing fixed size of 2 with 3 for dimension 2",
-                               _make_input_shape_fixed, model.graph, 'input', [4, 3])
+                               make_input_shape_fixed, model.graph, 'input', [4, 3])
 
         self.assertRaisesRegex(ValueError, "Input X1 was not found in graph inputs.",
-                               _make_input_shape_fixed, model.graph, 'X1', [2, 3])
+                               make_input_shape_fixed, model.graph, 'X1', [2, 3])

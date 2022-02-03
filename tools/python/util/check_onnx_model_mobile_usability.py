@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+
 import argparse
 import logging
 import pathlib
@@ -40,9 +43,9 @@ def check_usability():
 
     logger.info("Run `python -m onnxruntime.tools.convert_onnx_models_to_ort ...` to convert the ONNX model to "
                 "ORT format. By default, the conversion tool will create an ORT format model optimized to "
-                "'basic' level for use with NNAPI or CoreML with the .basic.ort file extension, "
-                "and an ORT format model optimized to 'all' level for use with the CPU EP with the "
-                ".all.ort file extension.")
+                "'basic' level (with a .basic.ort file extension) for use with NNAPI or CoreML, "
+                "and an ORT format model optimized to 'all' level (with a .all.ort file extension) for use with "
+                "the CPU EP.")
     if try_eps:
         logger.info("As NNAPI or CoreML may provide benefits with this model it is recommended to compare the "
                     "performance of the <model>.basic.ort model using the NNAPI EP on Android, and the "

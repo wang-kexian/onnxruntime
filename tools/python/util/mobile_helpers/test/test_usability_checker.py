@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+
 import logging
 import pathlib
 from testfixtures import LogCapture
@@ -76,8 +79,9 @@ class TestAnalyzer(unittest.TestCase):
                 ('default', 'INFO', 'Model should perform well with NNAPI as is: NO'),
                 ('default', 'INFO', 'Model should perform well with NNAPI if modified to have fixed input shapes: YES'),
                 ('default', 'INFO', '0 partitions with a total of 0/1 nodes can be handled by the CoreML EP.'),
+                ('default', 'INFO', 'CoreML can not run any nodes in this model.'),
                 ('default', 'INFO', 'Model should perform well with CoreML as is: NO'),
-                ('default', 'INFO', 'Model should perform well with CoreML if modified to have fixed input shapes: YES')
+                ('default', 'INFO', 'Model should perform well with CoreML if modified to have fixed input shapes: NO')
             )
 
     def test_multi_partitions(self):

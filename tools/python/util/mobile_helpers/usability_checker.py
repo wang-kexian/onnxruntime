@@ -1,8 +1,12 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+
 import argparse
 import logging
 import onnx
 import os
 import pathlib
+import tempfile
 
 from collections import deque
 from enum import IntEnum
@@ -19,7 +23,7 @@ class _SupportedOpsChecker:
 
     def __init__(self, filename):
         self._filename = filename
-        self._ops = {}  # op to caveat
+        self._ops = {}  # op to caveats
         self._ops_seen = set()
 
         with open(filename, 'r') as f:
@@ -402,7 +406,7 @@ def check_shapes(graph: onnx.GraphProto, logger: logging.Logger = None):
 
     # check we have value info.
     # special case some test graphs with a single node which only have graph input and output values, and
-    # a model where all inputs are dynamic
+    # a model where all inputs are dynamic (results in no value_info)
     if not graph.value_info and not (len(graph.node) == 1 or len(dynamic_inputs) == len(graph.input)):
         logger.warning("Unable to check shapes within model. "
                        "ONNX shape inferencing should be run on the model prior to checking.")
@@ -461,7 +465,7 @@ def checker(model_path, logger: logging.Logger):
 
         if suitability != PartitioningInfo.TryWithEP.YES and has_dynamic_shapes:
             logger.info(f"Checking if model will perform better if the dynamic shapes are fixed.")
-            partition_info_with_fixed_shapes = check_nnapi_partitions(model_with_shape_info)
+            partition_info_with_fixed_shapes = checker_func(model_with_shape_info)
             if logger.getEffectiveLevel() <= logging.DEBUG:
                 # analyze and log detailed info
                 logger.info('Partition information if the model was updated to make the shapes fixed:')
@@ -500,18 +504,17 @@ def analyze_model(model_path: pathlib.Path, skip_optimize: bool = False, logger:
     '''
     logger.info(f'Checking {model_path} for usability with ORT Mobile.')
 
-    if not skip_optimize:
-        model_path = optimize_model(model_path)
+    with tempfile.TemporaryDirectory() as tmp:
+        if not skip_optimize:
+            tmp_path = pathlib.Path(tmp) / model_path.name
+            optimize_model(model_path, tmp_path)
+            model_path = tmp_path
 
-    if not logger:
-        logger = logging.getLogger('usability_checker')
-        logger.setLevel(logging.INFO)
+        if not logger:
+            logger = logging.getLogger('usability_checker')
+            logger.setLevel(logging.INFO)
 
-    try_eps = checker(str(model_path.resolve(strict=True)), logger)
-
-    if not skip_optimize:
-        # remove the optimized version of the model we created
-        os.remove(model_path)
+        try_eps = checker(str(model_path.resolve(strict=True)), logger)
 
     return try_eps
 

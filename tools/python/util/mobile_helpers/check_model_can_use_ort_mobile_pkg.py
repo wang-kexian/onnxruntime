@@ -2,15 +2,15 @@
 # Licensed under the MIT License.
 
 # Helper script that will check if the types and operators used in an ONNX model
-# would be supported by the pre-built ORT Mobile package.
+# are supported by the pre-built ORT Mobile package.
 
 import argparse
 import logging
 import onnx
-import os
 import pathlib
 import sys
 from onnx import shape_inference
+from ..onnx_model_utils import get_opsets_imported
 from ..reduced_build_config_parser import parse_config
 
 
@@ -44,9 +44,9 @@ def check_graph(graph, opsets, required_ops, global_types, special_types, unsupp
     :param required_ops: Operators that are included in the pre-built package.
     :param global_types: Types globally enabled in the pre-built package.
     :param special_types: Types that are always enabled for a subset of operators and are _usually_ supported but are
-                          are not guaranteed to be. We would need to add a lot of infrastructure to know for sure so
+                          not guaranteed to be. We would need to add a lot of infrastructure to know for sure so
                           currently we treat them as supported.
-    :param unsupported_ops: Set of unsupported operators that is updated as they are found and returned to the caller.
+    :param unsupported_ops: Set of unsupported operators that were found.
     :param logger: Logger for diagnostic output.
     :return: Returns whether the graph uses unsupported operators or types.
     '''
@@ -176,13 +176,12 @@ def run_check_with_model(model_with_type_info: onnx.ModelProto,
                          mobile_pkg_build_config: pathlib.Path,
                          logger: logging.Logger):
     '''
-    Check if an ONNX model will be able to be used with the ORT Mobile pre-built package.
+    Check if an ONNX model can be used with the ORT Mobile pre-built package.
     :param model_with_type_info: ONNX model that has had ONNX shape inferencing run on to add type/shape information.
     :param mobile_pkg_build_config: Configuration file used to build the ORT Mobile package.
     :param logger: Logger for output
     :return: True if supported
     '''
-    # get default here for usage from usability_checker
     if not mobile_pkg_build_config:
         mobile_pkg_build_config = get_default_config_path()
 
@@ -192,11 +191,7 @@ def run_check_with_model(model_with_type_info: onnx.ModelProto,
     global_onnx_tensorproto_types, special_types = _get_global_tensorproto_types(op_type_impl_filter, logger)
 
     # get the opset imports
-    opsets = {}
-    for entry in model_with_type_info.opset_import:
-        # if empty it's ai.onnx
-        domain = entry.domain or 'ai.onnx'
-        opsets[domain] = entry.version
+    opsets = get_opsets_imported(model_with_type_info)
 
     # If the ONNX opset of the model is not supported we can recommend using our tools to update that first.
     supported_onnx_opsets = set(required_ops['ai.onnx'].keys())
@@ -224,10 +219,10 @@ def run_check_with_model(model_with_type_info: onnx.ModelProto,
             logger.info('  ' + entry)
 
     if unsupported:
-        logger.info('\nModel is not supported by the pre-built package due to unsupported types or operators.')
+        logger.info('\nModel is not supported by the pre-built package due to unsupported types and/or operators.')
         logger.info('Please see https://onnxruntime.ai/docs/reference/mobile/prebuilt-package/ for information '
                     'on what is supported in the pre-built package.')
-        logger.info('A custom build of ONNX Runtime would be required to run the model. Please see '
+        logger.info('A custom build of ONNX Runtime will be required to run the model. Please see '
                     'https://onnxruntime.ai/docs/build/custom.html for details on performing that.')
     else:
         logger.info('Model should work with the pre-built package.')
@@ -254,8 +249,8 @@ def run_check(model_path: pathlib.Path,
     model = onnx.load(str(model_file))
 
     # we need to run shape inferencing to populate that type info for node outputs.
-    # we will get warnings if the model uses ORT contrib ops, and type/shape inferencing will be lost downstream
-    # of those.
+    # we will get warnings if the model uses ORT contrib ops (ONNX does not have shape inferencing for those),
+    # and shape inferencing will be lost downstream of those.
     # TODO: add support for checking ORT format model as it will have full type/shape info for all nodes
     model_with_type_info = shape_inference.infer_shapes(model)
 
@@ -264,7 +259,7 @@ def run_check(model_path: pathlib.Path,
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Check if model is likely to be able to be run using the ONNX Runtime Mobile Pre-Built Package',
+        description='Check if model can be run using the ONNX Runtime Mobile Pre-Built Package',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('--config_path',

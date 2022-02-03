@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+
 import argparse
 import os
 import pathlib
@@ -21,7 +25,7 @@ def optimize_model_helper():
                              "being removed. Warning (2) or Info (1) may be desirable in some scenarios.")
 
     parser.add_argument('input_model', type=pathlib.Path, help='Provide path to ONNX model to update.')
-    parser.add_argument('output_model', type=pathlib.Path, help='Provide path to write updated ONNX model to.')
+    parser.add_argument('output_model', type=pathlib.Path, help='Provide path to write optimized ONNX model to.')
 
     args = parser.parse_args()
 

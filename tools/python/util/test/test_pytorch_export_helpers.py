@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+
 import torch
 import unittest
 
@@ -10,20 +13,11 @@ from ..pytorch_export_helpers import infer_input_info
 
 class TestModel(torch.nn.Module):
     def __init__(self, D_in, H, D_out):
-        """
-        In the constructor we instantiate two nn.Linear modules and assign them as
-        member variables.
-        """
         super(TestModel, self).__init__()
         self.linear1 = torch.nn.Linear(D_in, H)
         self.linear2 = torch.nn.Linear(H, D_out)
 
     def forward(self, x, min=0, max=1):
-        """
-        In the forward function we accept a Tensor of input data and we must return
-        a Tensor of output data. We can use Modules defined in the constructor as
-        well as arbitrary operators on Tensors.
-        """
         step1 = self.linear1(x).clamp(min=min, max=max)
         step2 = self.linear2(step1)
         return step2
@@ -36,7 +30,7 @@ class TestInferInputs(unittest.TestCase):
         cls._input = torch.randn(1, 1000)
 
     def test_positional(self):
-        # test we can infer the input names from the module when positional args are used
+        # test we can infer the input names from the forward method when positional args are used
         input_names, inputs_as_tuple = infer_input_info(self._model, self._input, 0, 1)
         self.assertEqual(input_names, ['x', 'min', 'max'])
 

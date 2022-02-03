@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+
 import logging
 import onnx
 import pathlib
@@ -9,7 +12,7 @@ from testfixtures import LogCapture
 from ..check_model_can_use_ort_mobile_pkg import run_check, run_check_with_model
 
 # example usage from <ort root>/tools/python
-# python -m unittest util/mobile_helpers/test/test_usability_checker.py
+# python -m unittest util/mobile_helpers/test/test_check_model_can_use_ort_mobile_pkg.py
 # NOTE: at least on Windows you must use that as the working directory for all the imports to be happy
 
 script_dir = pathlib.Path(__file__).parent
