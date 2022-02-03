@@ -61,6 +61,8 @@ if (onnxruntime_ENABLE_LAZY_TENSOR)
   set_source_files_properties("${ORTTRAINING_ROOT}/orttraining/lazy_tensor/register.cpp" PROPERTIES COMPILE_FLAGS -Wno-unused-parameter)
   set_source_files_properties("${ORTTRAINING_ROOT}/orttraining/lazy_tensor/accelerator.h" PROPERTIES COMPILE_FLAGS -Wno-unused-parameter)
   set_source_files_properties("${ORTTRAINING_ROOT}/orttraining/lazy_tensor/accelerator.cpp" PROPERTIES COMPILE_FLAGS -Wno-unused-parameter)
+  set_source_files_properties("${ORTTRAINING_ROOT}/orttraining/lazy_tensor/utils.h" PROPERTIES COMPILE_FLAGS -Wno-unused-parameter)
+  set_source_files_properties("${ORTTRAINING_ROOT}/orttraining/lazy_tensor/utils.cpp" PROPERTIES COMPILE_FLAGS -Wno-unused-parameter)
 
   list(APPEND onnxruntime_pybind_srcs
               ${onnxruntime_lazy_tensor_extension_srcs})
