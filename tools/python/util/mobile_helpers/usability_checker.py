@@ -432,6 +432,7 @@ def check_shapes(graph: onnx.GraphProto, logger: logging.Logger = None):
 
 
 def checker(model_path, logger: logging.Logger):
+
     model = onnx.load(model_path)
     model_with_shape_info = onnx.shape_inference.infer_shapes(model)
 
@@ -446,12 +447,6 @@ def checker(model_path, logger: logging.Logger):
 
     has_dynamic_shapes = check_shapes(model_with_shape_info.graph)
 
-    # test of making the dim_param fixed
-    # if has_dynamic_shapes:
-    #     make_dim_param_fixed(model_with_shape_info.graph, "unk__610", 1)
-    #     has_dynamic_shapes = check_shapes(model_with_shape_info)
-    #     print(f'New value for has_dynamic_shapes={has_dynamic_shapes}')
-
     def check_ep(ep_name, checker_func):
         logger.info(f"Checking {ep_name}")
 
@@ -461,10 +456,10 @@ def checker(model_path, logger: logging.Logger):
             # analyze and log detailed info
             partition_info.analyze_info(logger, ep_name)
 
-        current_suitability = partition_info.suitability()
-        logger.info(f"Model should perform well with {ep_name} as is: {current_suitability.name}")
+        suitability = partition_info.suitability()
+        logger.info(f"Model should perform well with {ep_name} as is: {suitability.name}")
 
-        if current_suitability != PartitioningInfo.TryWithEP.YES and has_dynamic_shapes:
+        if suitability != PartitioningInfo.TryWithEP.YES and has_dynamic_shapes:
             logger.info(f"Checking if model will perform better if the dynamic shapes are fixed.")
             partition_info_with_fixed_shapes = check_nnapi_partitions(model_with_shape_info)
             if logger.getEffectiveLevel() <= logging.DEBUG:
@@ -478,19 +473,32 @@ def checker(model_path, logger: logging.Logger):
             if fixed_shape_suitability != PartitioningInfo.TryWithEP.NO:
                 logger.info('Shapes can be altered using python -m onnxruntime.tools.make_dynamic_shape_fixed')
 
-        return current_suitability != PartitioningInfo.TryWithEP.YES
+            if fixed_shape_suitability.value > suitability.value:
+                suitability = fixed_shape_suitability
 
-    nnapi_issues = check_ep("NNAPI", check_nnapi_partitions)
-    coreml_issues = check_ep("CoreML", check_coreml_partitions)
+        return suitability
 
-    if (nnapi_issues or coreml_issues) and logger.getEffectiveLevel() > logging.DEBUG:
+    nnapi_suitability = check_ep("NNAPI", check_nnapi_partitions)
+    coreml_suitability = check_ep("CoreML", check_coreml_partitions)
+
+    if (nnapi_suitability != PartitioningInfo.TryWithEP.YES or coreml_suitability != PartitioningInfo.TryWithEP.YES) \
+            and logger.getEffectiveLevel() > logging.DEBUG:
         logger.info('Re-run with log level of DEBUG for more details on the NNAPI/CoreML issues.')
 
     logger.info('---------------')
+    return nnapi_suitability != PartitioningInfo.TryWithEP.NO or coreml_suitability != PartitioningInfo.TryWithEP.NO
 
 
 def analyze_model(model_path: pathlib.Path, skip_optimize: bool = False, logger: logging.Logger = None):
-    logger.info(f'Checking usability for {model_path} with ORT Mobile.')
+    '''
+    Analyze the provided model to determine if it's likely to work well with the NNAPI or CoreML Execution Providers
+    :param model_path: Model to analyze.
+    :param skip_optimize: Skip optimizing to BASIC level before checking. When exporting to ORT format we will do this
+                          optimization..
+    :param logger: Logger for output
+    :return: True if either the NNAPI or CoreML Execution Providers may work well with this model.
+    '''
+    logger.info(f'Checking {model_path} for usability with ORT Mobile.')
 
     if not skip_optimize:
         model_path = optimize_model(model_path)
@@ -499,11 +507,13 @@ def analyze_model(model_path: pathlib.Path, skip_optimize: bool = False, logger:
         logger = logging.getLogger('usability_checker')
         logger.setLevel(logging.INFO)
 
-    checker(str(model_path.resolve(strict=True)), logger)
+    try_eps = checker(str(model_path.resolve(strict=True)), logger)
 
     if not skip_optimize:
         # remove the optimized version of the model we created
         os.remove(model_path)
+
+    return try_eps
 
 
 def parse_args():

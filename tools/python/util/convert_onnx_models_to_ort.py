@@ -23,7 +23,8 @@ def _onnx_model_path_to_ort_model_path(onnx_model_path: pathlib.Path, optimizati
 
 
 def _create_config_file_from_ort_models(onnx_model_path_or_dir: pathlib.Path, optimization_level_str: str,
-                                        enable_type_reduction: bool):
+                                        enable_type_reduction: bool,
+                                        optimization_level: str):
     if onnx_model_path_or_dir.is_dir():
         # model directory
         model_path_or_dir = onnx_model_path_or_dir
@@ -31,13 +32,15 @@ def _create_config_file_from_ort_models(onnx_model_path_or_dir: pathlib.Path, op
     else:
         # single model
         model_path_or_dir = _onnx_model_path_to_ort_model_path(onnx_model_path_or_dir, optimization_level_str)
-        config_suffix = ".{}".format(
-            'required_operators_and_types.config' if enable_type_reduction else 'required_operators.config')
+        suffix = f'.{optimization_level}.config' if optimization_level else '.config'
+        config_suffix = ".{}{}".format(
+            'required_operators_and_types' if enable_type_reduction else 'required_operators', suffix)
         config_path = model_path_or_dir.with_suffix(config_suffix)
 
     create_config_from_models(model_path_or_dir=str(model_path_or_dir),
                               output_file=str(config_path) if config_path is not None else None,
-                              enable_type_reduction=enable_type_reduction)
+                              enable_type_reduction=enable_type_reduction,
+                              optimization_level=optimization_level)
 
 
 def _create_session_options(optimization_level: ort.GraphOptimizationLevel,
@@ -162,13 +165,18 @@ def parse_args():
                              'CoreML execution provider takes, in order to preserve those nodes in the ORT format '
                              'model.')
 
-    parser.add_argument('--optimization_level', default='all',
+    parser.add_argument('--optimization_level', default=['basic', 'all'], nargs='+',
                         choices=['disable', 'basic', 'extended', 'all'],
                         help="Level to optimize ONNX model with, prior to converting to ORT format model. "
                              "These map to the onnxruntime.GraphOptimizationLevel values. "
                              "If the level is 'all' the NCHWc transformer is manually disabled as it contains device "
                              "specific logic, so the ORT format model must be generated on the device it will run on. "
                              "Additionally, the NCHWc optimizations are not applicable to ARM devices."
+                             "Multiple values can be provided. A model produced with 'all' is optimal for usage with"
+                             "just the CPU Execution Provider. A model produced with 'basic' is required for usage "
+                             "with the NNAPI or CoreML Execution Providers. "
+                             "The filename for the ORT format model will contain the optimization level that was used "
+                             "to create it."
                         )
 
     parser.add_argument('--enable_type_reduction', action='store_true',
@@ -220,10 +228,13 @@ def convert_onnx_models_to_ort():
     if args.nnapi_partitioning_stop_ops is not None:
         session_options_config_entries["ep.nnapi.partitioning_stop_ops"] = args.nnapi_partitioning_stop_ops
 
-    _convert(model_path_or_dir, args.optimization_level, args.use_nnapi, args.use_coreml, custom_op_library,
-             args.save_optimized_onnx_model, args.allow_conversion_failures, session_options_config_entries)
+    for optimization_level in args.optimization_level:
+        print(f"Converting models and creating configuration file for optimization level '{optimization_level}'")
+        _convert(model_path_or_dir, optimization_level, args.use_nnapi, args.use_coreml, custom_op_library,
+                 args.save_optimized_onnx_model, args.allow_conversion_failures, session_options_config_entries)
 
-    _create_config_file_from_ort_models(model_path_or_dir, args.optimization_level, args.enable_type_reduction)
+        _create_config_file_from_ort_models(model_path_or_dir, optimization_level, args.enable_type_reduction,
+                                            optimization_level)
 
 
 if __name__ == '__main__':

@@ -33,8 +33,19 @@ def check_usability():
     else:
         logger.setLevel(logging.ERROR)
 
-    usability_checker.analyze_model(args.model_path, skip_optimize=False, logger=logger)
+    try_eps = usability_checker.analyze_model(args.model_path, skip_optimize=False, logger=logger)
     check_model_can_use_ort_mobile_pkg.run_check(args.model_path, args.config_path, logger)
+
+    logger.info("Run `python -m onnxruntime.tools.convert_onnx_models_to_ort ...` to convert the ONNX model to "
+                "ORT format. By default, the conversion will create a version optimized to 'basic' level for use with "
+                "NNAPI or CoreML with the .basic.ort file extension, and a version optimized to 'all' level for use "
+                "with the CPU EP with the .all.ort file extension.")
+    if try_eps:
+        logger.info("As NNAPI or CoreML may provide benefits with this model it is recommended to compare the "
+                    "performance of the <model>.basic.ort model using the NNAPI EP/CoreML EP against "
+                    "the performance of the <model>.all.ort model using the CPU EP.")
+    else:
+        logger.info("For optimal performance the <model>.all.ort model should be used with the CPU EP. ")
 
 
 if __name__ == '__main__':

@@ -247,9 +247,8 @@ def run_check(model_path: pathlib.Path,
     :param logger: Logger for output
     :return: True if supported
     '''
-    logger.info(f'Checking if pre-built ORT Mobile package can be used with {model_path}. ')
-    logger.info('Note the model would need to be converted from ONNX to ORT format using '
-                'onnxruntime.tools.convert_onnx_models_to_ort')
+    logger.info(f'Checking if pre-built ORT Mobile package can be used with {model_path} once model is '
+                'converted from ONNX to ORT format using onnxruntime.tools.convert_onnx_models_to_ort...')
 
     model_file = model_path.resolve(strict=True)
     model = onnx.load(str(model_file))

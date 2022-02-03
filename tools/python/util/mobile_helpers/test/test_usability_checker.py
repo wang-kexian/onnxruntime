@@ -54,7 +54,7 @@ class TestAnalyzer(unittest.TestCase):
             log_capture.check_present(
                 ('default', 'INFO', '0 partitions with a total of 0/76 nodes can be handled by the NNAPI EP.'),
                 ('default', 'INFO', '72 nodes are in subgraphs, which are currently not handled.'),
-                ('default', 'DEBUG', 'Unsupported ops: ai.onnx:Scan'),
+                ('default', 'INFO', 'Unsupported ops: ai.onnx:Scan'),
                 ('default', 'INFO', 'Model should perform well with NNAPI as is: NO'),
                 ('default', 'INFO', '0 partitions with a total of 0/76 nodes can be handled by the CoreML EP.'),
                 ('default', 'INFO', 'Model should perform well with CoreML as is: NO')
@@ -93,8 +93,10 @@ class TestAnalyzer(unittest.TestCase):
             log_capture.check_present(
                 ('default', 'INFO', '3 partitions with a total of 17/46 nodes can be handled by the NNAPI EP.'),
                 ('default', 'INFO', 'Partition sizes: [5, 4, 8]'),
-                ('default', 'DEBUG', 'Unsupported ops: ai.onnx:Gather,ai.onnx:ReduceProd,ai.onnx:ReduceSum,ai.onnx:Shape,ai.onnx:Unsqueeze'),  # noqa
-                ('default', 'INFO', 'NNAPI is not recommended with this model as there are 3 partitions. This will most likely result in worse performance than just using the CPU EP.'), # noqa
+                ('default', 'INFO', 'Unsupported ops: ai.onnx:Gather,ai.onnx:ReduceProd,ai.onnx:ReduceSum,'
+                                    'ai.onnx:Shape,ai.onnx:Unsqueeze'),
+                ('default', 'INFO', 'NNAPI is not recommended with this model as there are 3 partitions. '
+                                    'This will most likely result in worse performance than just using the CPU EP.'),
                 ('default', 'INFO', 'Model should perform well with NNAPI as is: NO'),
                 ('default', 'INFO', 'Partition information if the model was updated to make the shapes fixed:'),
                 ('default', 'INFO', '3 partitions with a total of 23/46 nodes can be handled by the NNAPI EP.'),
@@ -103,8 +105,3 @@ class TestAnalyzer(unittest.TestCase):
                 ('default', 'INFO', 'Partition sizes: [4, 4, 7]'),
                 ('default', 'INFO', 'Model should perform well with CoreML as is: NO')
             )
-
-    def test_yolov5(self):
-        model_path = pathlib.Path(r'D:\temp\PTExporterTest\yolo_v5.onnx')
-        logger = _create_logger()
-        analyze_model(model_path, skip_optimize, logger)
