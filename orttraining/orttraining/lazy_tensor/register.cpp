@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
 #include <iostream>
 #include <torch/extension.h>
 
@@ -10,7 +13,8 @@
 
 namespace py = pybind11;
 
-namespace {
+namespace onnxruntime {
+namespace lazytensor {
 void register_ort_as_torch_jit_executor() {
   // Pytorch's JIT symbol to be execute by ORT.
   const auto accelerator_symbol =
@@ -47,7 +51,8 @@ void register_ort_as_torch_jit_executor() {
       accelerator_symbol, op_creator,
       c10::AliasAnalysisKind::PURE_FUNCTION)});
 }
-}
+}  // namespace lazytensor
+}  // namespace onnxruntime
 
 namespace onnxruntime{
 namespace python{
@@ -57,9 +62,9 @@ void addObjectMethodsForLazyTensor(py::module& m) {
   m.def(
       "register_ort_as_torch_jit_executor",
       []() {
-        ::register_ort_as_torch_jit_executor();
+        onnxruntime::lazytensor::register_ort_as_torch_jit_executor();
       });
 }
 
-}
-}
+} // namespace python
+} // namespace onnxruntime

@@ -1,26 +1,11 @@
-#include "accelerator.h"
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+#include "utils.h"
 #include <string>
-#include <stack>
-#include <iostream>
-#include <stdexcept>
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <torch/extension.h>
 #include <torch/torch.h>
-#include <torch/csrc/jit/resource_guard.h>
-#include <torch/csrc/jit/python/python_ir.h>
-#include <torch/csrc/jit/ir/constants.h>
-#include <torch/csrc/jit/passes/onnx.h>
-#include <ATen/core/functional.h>
-#include "core/framework/session_options.h"
-#include "orttraining/core/session/training_session.h"
-#include "core/session/environment.h"
-#include "core/session/inference_session.h"
-#include "core/common/logging/sinks/clog_sink.h"
-#include "core/framework/ortdevice.h"
-#include "core/framework/ort_value.h"
-#include "python/onnxruntime_pybind_state_common.h"
 
+namespace onnxruntime {
+namespace lazytensor {
 c10::ScalarType CreateC10ScalarType(const onnxruntime::PrimitiveDataTypeBase* elem_type) {
   ORT_ENFORCE(elem_type, "Element type pointer cannot be NULL.");
   switch (static_cast<ONNX_NAMESPACE::TensorProto_DataType>(elem_type->GetDataType())) {
@@ -77,7 +62,6 @@ onnxruntime::MLDataType CreateOrtScalarType(
   }
 }
 
-// Create OrtDevice from c10::Device.
 OrtDevice CreateOrtDevice(const c10::Device device) {
   // c10::Device's ID can be negative, which means current device.
   // Assumptions:
@@ -100,7 +84,6 @@ OrtDevice CreateOrtDevice(const c10::Device device) {
   }
 }
 
-// Translate Ortdevice to c10::Device.
 c10::Device CreateC10Device(const OrtDevice& device) {
   // Handles CPU, GPU, and throws otherwise.
   switch (device.Type()) {
@@ -149,8 +132,6 @@ OrtValue CreateOrtTensorValue(const at::Tensor& tensor) {
   return ort_value;
 }
 
-// Create at::Tensor from onnxruntime::Tensor and keep
-// onnxruntime::Tensor alive until at::Tensor is dead.
 c10::IValue CreateC10IvalueTensor(OrtValue value) {
   onnxruntime::Tensor* tensor = value.GetMutable<onnxruntime::Tensor>();
   const OrtDevice& device = tensor->Location().device;
@@ -163,7 +144,7 @@ c10::IValue CreateC10IvalueTensor(OrtValue value) {
   // Extract shape from onnxruntime::TensorShape as a vector.
   auto create_shape_vector = [](const onnxruntime::TensorShape& shape) {
     std::vector<int64_t> new_shape(shape.NumDimensions());
-    shape.CopyDims(new_shape.data(), num_dims);
+    shape.CopyDims(new_shape.data(), shape.NumDimensions());
     return new_shape;
   };
 
@@ -182,3 +163,5 @@ c10::IValue CreateC10IvalueTensor(OrtValue value) {
 
   return c10::IValue(new_tensor);
 }
+}  // namespace lazytensor
+}  // namespace onnxruntime

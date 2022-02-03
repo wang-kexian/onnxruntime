@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
 #include "accelerator.h"
 #include "utils.h"
 #include <string>
@@ -21,6 +24,9 @@
 #include "core/framework/ortdevice.h"
 #include "core/framework/ort_value.h"
 #include "python/onnxruntime_pybind_state_common.h"
+
+namespace onnxruntime {
+namespace lazytensor {
 
 namespace py = pybind11;
 namespace aten = torch::jit::aten;
@@ -208,22 +214,24 @@ CompiledObject Accelerator::Compile(
   }
 
   // Memory info for all tensors.
+  // Assume all inputs and outputs are on the same device.
   OrtDevice shared_device = CheckAndGetTensorDevice(args);
+  // Duplicate device info for each output tensor.
   std::vector<OrtDevice> fetches_device_info(fetch_names.size(), shared_device);
 
-  // This function wraps the function pointer we bound our assembly to
-  // Adheres to the CompiledCode interface defined in compiler.h
   auto code = [this, spec, run_options,
                feed_names, fetch_names,
                fetches_device_info, &sess](at::ArrayRef<c10::IValue>& args) {
+    // Inputs of ORT session.
     std::vector<OrtValue> feeds;
+    // Outputs of ORT session.
     std::vector<OrtValue> fetches;
 
-    // LazyTensor backend assumes all tensors are on the same device.
-    OrtMemoryInfo tensor_memory_info;
+    // Prepare inputs.
     const auto num_inputs = subgraph_->inputs().size();
     for (size_t i = 0; i < num_inputs; ++i) {
       if (subgraph_->inputs().at(i)->type()->kind() == c10::TypeKind::TensorType) {
+        // Create ORT tensor from Pytorch tensor without copy.
         feeds.push_back(CreateOrtTensorValue(args.at(i).toTensor()));
       } else {
         // Looks like LTC only passes tensors into backend, so we don't care
@@ -232,12 +240,16 @@ CompiledObject Accelerator::Compile(
       }
     }
 
-    std::cout << "[accelerator.cpp] sess.Run" << std::endl;
-    ORT_THROW_IF_ERROR(sess.Run(run_options, feed_names, feeds, fetch_names, &fetches, &fetches_device_info));
-    std::cout << "[accelerator.cpp] sess.Run done" << std::endl;
+    // Inputs are ready. Let's run ORT.
+    ORT_THROW_IF_ERROR(sess.Run(
+        run_options,
+        feed_names, feeds,
+        fetch_names, &fetches, &fetches_device_info));
 
+    // Convert ORT output to Pytorch format.
     std::vector<c10::IValue> outputs;
     for (auto value : fetches) {
+      // Create Pytorch tensor from ORT tensor without copy.
       outputs.push_back(std::move(CreateC10IvalueTensor(value)));
     }
 
@@ -247,3 +259,5 @@ CompiledObject Accelerator::Compile(
   compiled.code = code;
   return compiled;
 }
+}  // namespace lazytensor
+}  // namespace onnxruntime
