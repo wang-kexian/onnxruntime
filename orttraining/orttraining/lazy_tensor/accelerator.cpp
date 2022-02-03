@@ -2,27 +2,14 @@
 // Licensed under the MIT License.
 
 #include "accelerator.h"
-#include "bridge.h"
-#include <string>
-#include <stack>
 #include <iostream>
-#include <stdexcept>
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <torch/extension.h>
-#include <torch/torch.h>
-#include <torch/csrc/jit/resource_guard.h>
-#include <torch/csrc/jit/python/python_ir.h>
-#include <torch/csrc/jit/ir/constants.h>
+#include <string>
 #include <torch/csrc/jit/passes/onnx.h>
-#include <ATen/core/functional.h>
-#include "core/framework/session_options.h"
-#include "orttraining/core/session/training_session.h"
-#include "core/session/environment.h"
-#include "core/session/inference_session.h"
+#include <torch/torch.h>
+#include "bridge.h"
 #include "core/common/logging/sinks/clog_sink.h"
-#include "core/framework/ortdevice.h"
-#include "core/framework/ort_value.h"
+#include "core/framework/session_options.h"
+#include "core/session/environment.h"
 #include "python/onnxruntime_pybind_state_common.h"
 
 namespace onnxruntime {

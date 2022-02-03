@@ -2,16 +2,14 @@
 // Licensed under the MIT License.
 
 #include <iostream>
+// Instead of torch/torch.h, include torch torch/extension.h
+// for extra Python headers.
 #include <torch/extension.h>
-
-
-#include "accelerator.h"
-#include <torch/csrc/jit/runtime/custom_operator.h>
 #include <torch/csrc/jit/passes/pass_manager.h>
 #include <torch/csrc/jit/passes/graph_fuser.h>
+#include <torch/csrc/jit/runtime/custom_operator.h>
+#include "accelerator.h"
 #include "core/common/logging/logging.h"
-
-namespace py = pybind11;
 
 namespace onnxruntime {
 namespace lazytensor {
@@ -57,7 +55,7 @@ void register_ort_as_torch_jit_executor() {
 namespace onnxruntime{
 namespace python{
 
-void addObjectMethodsForLazyTensor(py::module& m) {
+void addObjectMethodsForLazyTensor(pybind11::module& m) {
   LOGS_DEFAULT(INFO) << "pybind11 module init for lazy tensor";
   m.def(
       "register_ort_as_torch_jit_executor",

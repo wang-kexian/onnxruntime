@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
-#include "utils.h"
-#include <string>
+#include "bridge.h"
 #include <torch/torch.h>
 
 namespace onnxruntime {
@@ -100,7 +99,7 @@ c10::Device CreateC10Device(const OrtDevice& device) {
     }
     default: {
       // Got unsupported device. Throws.
-      std::string device_str;
+      const char* device_str = nullptr;
       if (device.Type() == OrtDevice::CPU) {
         device_str = "CPU";
       } else if (device.Type() == OrtDevice::GPU) {

@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 #include <ATen/core/ivalue.h>
-#include "core/framework/session_options.h"
 #include "core/framework/ortdevice.h"
 #include "core/framework/ort_value.h"
 
