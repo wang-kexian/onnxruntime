@@ -6,7 +6,7 @@ from onnx import helper
 from onnx import shape_inference
 from onnx import TensorProto
 
-from ..onnx_model_utils import get_producer_consumer_maps, make_dim_param_fixed, make_input_shape_fixed
+from ..onnx_model_utils import get_producer_consumer_maps, _make_dim_param_fixed, _make_input_shape_fixed
 from ..mobile_helpers.usability_checker import check_shapes
 
 script_dir = pathlib.Path(__file__).parent
@@ -146,7 +146,7 @@ class TestDynamicDimReplacement(unittest.TestCase):
         self.assertEqual(dynamic_inputs[0].name, 'Input3')
         self.assertGreater(num_dynamic_values, 0)
 
-        make_dim_param_fixed(model.graph, 'None', 4)
+        _make_dim_param_fixed(model.graph, 'None', 4)
 
         model = shape_inference.infer_shapes(model, True)
         dynamic_inputs, num_dynamic_values = check_shapes(model.graph)
@@ -168,9 +168,9 @@ class TestDynamicDimReplacement(unittest.TestCase):
         self.assertEqual(dynamic_inputs[2].name, 'X3')
         self.assertGreater(num_dynamic_values, 0)
 
-        make_input_shape_fixed(model.graph, 'X1', [2, 2, 4])
-        make_input_shape_fixed(model.graph, 'X2', [2, 4])
-        make_input_shape_fixed(model.graph, 'X3', [2, 2, 4])
+        _make_input_shape_fixed(model.graph, 'X1', [2, 2, 4])
+        _make_input_shape_fixed(model.graph, 'X2', [2, 4])
+        _make_input_shape_fixed(model.graph, 'X3', [2, 2, 4])
 
         # and validate the model no longer has dynamic values
         model = shape_inference.infer_shapes(model, True)
@@ -192,10 +192,10 @@ class TestDynamicDimReplacement(unittest.TestCase):
 
         # first test some invalid usages
         self.assertRaisesRegex(ValueError, "Rank mismatch. Existing:2 Replacement:3",
-                               make_input_shape_fixed, model.graph, 'input', [1, 2, 3])
+                               _make_input_shape_fixed, model.graph, 'input', [1, 2, 3])
 
         self.assertRaisesRegex(ValueError, "Can't replace existing fixed size of 2 with 3 for dimension 2",
-                               make_input_shape_fixed, model.graph, 'input', [4, 3])
+                               _make_input_shape_fixed, model.graph, 'input', [4, 3])
 
         self.assertRaisesRegex(ValueError, "Input X1 was not found in graph inputs.",
-                               make_input_shape_fixed, model.graph, 'X1', [2, 3])
+                               _make_input_shape_fixed, model.graph, 'X1', [2, 3])

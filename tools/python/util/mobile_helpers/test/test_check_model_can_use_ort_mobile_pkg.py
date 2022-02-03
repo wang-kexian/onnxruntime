@@ -35,8 +35,7 @@ class TestMobilePackageModelChecker(unittest.TestCase):
 
             # print(log_capture)
             log_capture.check_present(
-                ('default', 'INFO', 'Model is most likely supported. Note that this check is not comprehensive '
-                 'so testing to validate is still required.'),
+                ('default', 'INFO', 'Model should work with the pre-built package.'),
             )
 
     def test_model_invalid_opset(self):

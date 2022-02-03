@@ -172,16 +172,29 @@ def _make_input_shape_fixed(graph: onnx.GraphProto, input_name, fixed_shape: [in
 
 
 def make_dynamic_shape_fixed(model_path: pathlib.Path,
-                             output_path: pathlib.Path,
+                             output_path: pathlib.Path = None,
                              dim_param: str = None, dim_value: int = -1,
                              input_name: str = None, input_shape: [int] = None):
+    '''
+    Update a dim_param or input shape so that it has a fixed value.
+    :param model_path: Path to model to update
+    :param output_path: Optional path to save updated model to.
+    :param dim_param: Optional dim_param if updating a single symbolic value. dim_value must be provided if not None.
+    :param dim_value: Value to replace dim_param with.
+    :param input_name: Optional graph input to set shape for. input_shape must be provided if not None.
+    :param input_shape: Shape to use for input_name. All values must be > 0.
+    :return: onnx.ModelProto with updated model.
+    '''
     model = onnx.load(str(model_path))
     if dim_param:
         _make_dim_param_fixed(model.graph, dim_param, dim_value)
     else:
         _make_input_shape_fixed(model.graph, input_name, input_shape)
 
-    onnx.save(model, str(output_path))
+    if output_path:
+        onnx.save(model, str(output_path))
+
+    return model
 
 
 def _create_producer_consumer_link(node_to_producers: dict, node_to_consumers: dict,

@@ -36,20 +36,12 @@ class TestInferInputs(unittest.TestCase):
         cls._input = torch.randn(1, 1000)
 
     def test_positional(self):
-
-        # Construct our model by instantiating the class defined above
-        # pred = model(x, 0, 1)
+        # test we can infer the input names from the module when positional args are used
         input_names, inputs_as_tuple = infer_input_info(self._model, self._input, 0, 1)
-        print(input_names)
         self.assertEqual(input_names, ['x', 'min', 'max'])
 
     def test_keywords(self):
-        N, D_in, H, D_out = 1, 1000, 100, 10
-        x = torch.randn(N, D_in)
-
-        # Construct our model by instantiating the class defined above
-        model = TestModel(D_in, H, D_out)
+        # test that we sort keyword args and the inputs to match the module
         input_names, inputs_as_tuple = infer_input_info(self._model, self._input, max=1, min=0)
-        # pred = model(x, max=1, min=0)
         self.assertEqual(input_names, ['x', 'min', 'max'])
         self.assertEqual(inputs_as_tuple, (self._input, 0, 1))

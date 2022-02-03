@@ -5,7 +5,7 @@ import os
 import pathlib
 
 from collections import deque
-from enum import Enum
+from enum import IntEnum
 from ..onnx_model_utils import get_producer_consumer_maps, optimize_model, \
     iterate_graph_per_graph_func, iterate_graph_per_node_func, is_fixed_size_tensor
 
@@ -58,7 +58,7 @@ class _SupportedOpsChecker:
 
 
 class PartitioningInfo:
-    class TryWithEP(Enum):
+    class TryWithEP(IntEnum):
         NO = 0,
         MAYBE = 1,
         YES = 2
