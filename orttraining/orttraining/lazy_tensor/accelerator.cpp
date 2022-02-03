@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 #include "accelerator.h"
-#include "utils.h"
+#include "bridge.h"
 #include <string>
 #include <stack>
 #include <iostream>
