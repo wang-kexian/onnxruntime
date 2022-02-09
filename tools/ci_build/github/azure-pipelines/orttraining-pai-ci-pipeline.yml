@@ -35,7 +35,7 @@ jobs:
   #  displayName: 'Toggle ON deterministic compute mode for ORTModule'
 
   - script: |-
-      apt-get install lsof -y
+      sudo apt-get install lsof -y
       echo $(Agent.Name)
       bash ./tools/ci_build/github/pai/pai_get_thread.sh $(Agent.Name)
     displayName: 'Check Variable'
