@@ -34,6 +34,9 @@ jobs:
   #       orttraining/orttraining/python/training/ortmodule/_graph_execution_manager.py
   #  displayName: 'Toggle ON deterministic compute mode for ORTModule'
   
+  - name: Install requirements
+    run: apt-get install lsof -y
+
   - script: |-
       echo $(Agent.Name)
       bash ./tools/ci_build/github/pai/pai_get_thread.sh $(Agent.Name)
