@@ -24,8 +24,21 @@ struct KernelRegistryAndStatus {
 }  // namespace
 
 namespace onnxruntime {
-
+namespace xnnpack {
+#ifdef USE_XNNPACK
+extern Status RegisterXNNPackKernels(KernelRegistry& kernel_registry);
+#else
+extern Status RegisterXNNPackKernels(KernelRegistry& kernel_registry) {
+  return Status::OK();
+}
+#endif
+}  // namespace xnnpack
 // Forward declarations of op kernels
+
+// XNNPack kernels
+class ONNX_OPERATOR_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 11, Conv);
+
+// CPU EP kernels
 class ONNX_OPERATOR_VERSIONED_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 6, 10, Clip);
 class ONNX_OPERATOR_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 6, Elu);
 class ONNX_OPERATOR_KERNEL_CLASS_NAME(kCpuExecutionProvider, kOnnxDomain, 6, HardSigmoid);
@@ -2058,10 +2071,11 @@ Status RegisterCPUKernels(KernelRegistry& kernel_registry) {
 #endif
 #ifndef DISABLE_CONTRIB_OPS
   ORT_RETURN_IF_ERROR(::onnxruntime::contrib::RegisterCpuContribKernels(kernel_registry));
+  ORT_RETURN_IF_ERROR(::onnxruntime::xnnpack::RegisterXNNPackKernels(kernel_registry));
 #endif
 #if defined(ENABLE_TRAINING) || defined(ENABLE_TRAINING_OPS)
   ORT_RETURN_IF_ERROR(::onnxruntime::contrib::RegisterCpuTrainingKernels(kernel_registry));
-#endif
+#endif  
   return Status::OK();
 }
 

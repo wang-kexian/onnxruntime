@@ -485,24 +485,28 @@ endif()
 
 set(ONNXRUNTIME_TEST_LIBS
     onnxruntime_session
-    ${ONNXRUNTIME_INTEROP_TEST_LIBS}
     ${onnxruntime_libs}
     # CUDA, ROCM, TENSORRT, MIGRAPHX, DNNL, and OpenVINO are dynamically loaded at runtime
-    ${PROVIDERS_NUPHAR}
-    ${PROVIDERS_NNAPI}
-    ${PROVIDERS_RKNPU}
-    ${PROVIDERS_DML}
     ${PROVIDERS_ACL}
     ${PROVIDERS_ARMNN}
     ${PROVIDERS_COREML}
-    # ${PROVIDERS_STVM}
+    ${PROVIDERS_DML}
+    ${PROVIDERS_NNAPI}
+    ${PROVIDERS_NUPHAR}
+    ${PROVIDERS_STVM}
+    ${PROVIDERS_RKNPU}
+    ${PROVIDERS_ROCM}
+    ${PROVIDERS_VITISAI}
+    ${PROVIDERS_INTERNAL_TESTING}
+    ${onnxruntime_winml}
     onnxruntime_optimizer
+    onnxruntime_xnnpack
     onnxruntime_providers
-    onnxruntime_util
     ${onnxruntime_tvm_libs}
     onnxruntime_framework
+    onnxruntime_graph  
     onnxruntime_util
-    onnxruntime_graph
+    onnxruntime_xnnpack_schemas
     ${ONNXRUNTIME_MLAS_LIBS}
     onnxruntime_common
     onnxruntime_flatbuffers
@@ -1253,7 +1257,10 @@ if (NOT onnxruntime_ENABLE_TRAINING_TORCH_INTEROP)
       set_property(TEST onnxruntime4j_test APPEND PROPERTY DEPENDS onnxruntime4j_jni)
   endif()
 endif()
-
+if (NOT onnxruntime_MINIMAL_BUILD)
+  onnxruntime_add_executable(layout_transformer ${REPO_ROOT}/onnxruntime/tool/layout_transformer.cc ${REPO_ROOT}/onnxruntime/core/providers/cpu/tensor/transpose.cc)
+  target_link_libraries(layout_transformer PRIVATE onnxruntime_optimizer onnxruntime_util onnxruntime_framework onnxruntime_graph onnxruntime_mlas onnxruntime_common onnxruntime_flatbuffers ${onnxruntime_EXTERNAL_LIBRARIES})
+endif()
 # limit to only test on windows first, due to a runtime path issue on linux
 if (NOT onnxruntime_MINIMAL_BUILD AND NOT onnxruntime_EXTENDED_MINIMAL_BUILD
                                   AND NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin|iOS"
@@ -1296,3 +1303,25 @@ if (onnxruntime_USE_STVM)
 endif()
 
 include(onnxruntime_fuzz_test.cmake)
+
+#if(onnxruntime_USE_XNNPACK)
+if(FALSE)
+    onnxruntime_add_executable(onnxruntime_xnnpack_test   "${TEST_SRC_DIR}/xnnpack/main.cpp" "${TEST_SRC_DIR}/xnnpack/model.c" "${TEST_SRC_DIR}/xnnpack/input.c")
+    if(${CMAKE_SYSTEM_NAME} STREQUAL "iOS")
+      set_target_properties(onnxruntime_xnnpack_test PROPERTIES
+        XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+    )
+    endif()
+    target_include_directories(onnxruntime_xnnpack_test PRIVATE ${ONNXRUNTIME_ROOT}
+            ${CMAKE_CURRENT_BINARY_DIR})
+    target_link_libraries(onnxruntime_xnnpack_test PRIVATE  onnxruntime_session
+  onnxruntime_optimizer
+  onnxruntime_providers
+  onnxruntime_util
+  onnxruntime_framework
+  onnxruntime_graph
+  ${ONNXRUNTIME_MLAS_LIBS}
+  onnxruntime_common
+  onnxruntime_flatbuffers ${onnxruntime_EXTERNAL_LIBRARIES})
+    set_target_properties(onnxruntime_xnnpack_test PROPERTIES FOLDER "ONNXRuntimeTest")
+endif()

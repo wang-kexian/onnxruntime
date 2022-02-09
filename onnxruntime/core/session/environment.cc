@@ -2,6 +2,11 @@
 // Licensed under the MIT License.
 
 #include "core/session/environment.h"
+
+#ifdef USE_XNNPACK
+#include <xnnpack.h>
+#endif
+
 #include "core/session/allocator_adapters.h"
 #include "core/framework/allocatormgr.h"
 #include "core/graph/constants.h"
@@ -53,6 +58,9 @@ Status Environment::Create(std::unique_ptr<logging::LoggingManager> logging_mana
                            std::unique_ptr<Environment>& environment,
                            const OrtThreadingOptions* tp_options,
                            bool create_global_thread_pools) {
+#ifdef USE_XNNPACK
+  xnn_initialize(nullptr);
+#endif
   environment = std::make_unique<Environment>();
   auto status = environment->Initialize(std::move(logging_manager), tp_options, create_global_thread_pools);
   return status;

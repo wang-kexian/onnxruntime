@@ -106,7 +106,6 @@ function(setup_mlas_source_for_windows)
       ${MLAS_SRC_DIR}/arm/sgemmc.cpp
     )
   elseif(onnxruntime_target_platform STREQUAL "x64")
-
     file(GLOB_RECURSE mlas_platform_srcs_avx CONFIGURE_DEPENDS
       "${MLAS_SRC_DIR}/intrinsics/avx/*.cpp"
     )

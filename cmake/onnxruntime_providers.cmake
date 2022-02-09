@@ -64,6 +64,14 @@ file(GLOB_RECURSE onnxruntime_providers_srcs CONFIGURE_DEPENDS
   "${ONNXRUNTIME_ROOT}/core/providers/cpu/*.cc"
 )
 
+if(onnxruntime_USE_XNNPACK)
+  onnxruntime_add_static_library(onnxruntime_xnnpack ${ONNXRUNTIME_ROOT}/core/xnnpack/conv.h ${ONNXRUNTIME_ROOT}/core/xnnpack/conv.cc ${ONNXRUNTIME_ROOT}/core/xnnpack/xnnpack_kernels.cc)
+  target_include_directories(onnxruntime_xnnpack PRIVATE ${ONNXRUNTIME_ROOT} ${eigen_INCLUDE_DIRS})
+  set_target_properties(onnxruntime_xnnpack PROPERTIES FOLDER "ONNXRuntime")
+  onnxruntime_add_include_to_target(onnxruntime_xnnpack onnxruntime_common onnxruntime_framework onnx onnx_proto ${PROTOBUF_LIB} flatbuffers XNNPACK pthreadpool)
+  #list(REMOVE_ITEM  onnxruntime_providers_srcs ${ONNXRUNTIME_ROOT}/core/providers/cpu/nn/conv.h ${ONNXRUNTIME_ROOT}/core/providers/cpu/nn/conv.cc)
+endif()
+
 if(onnxruntime_DISABLE_ML_OPS)
   list(FILTER onnxruntime_providers_srcs EXCLUDE REGEX ".*/ml/.*")
 endif()

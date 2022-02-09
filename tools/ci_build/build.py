@@ -584,6 +584,7 @@ def parse_arguments():
         "--enable_cuda_profiling", action='store_true', help="enable cuda kernel profiling, \
         cupti library must be added to PATH beforehand.")
 
+    parser.add_argument("--use_xnnpack", action='store_true', help="Enable xnnpack EP.")
     return parser.parse_args()
 
 
@@ -831,6 +832,7 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home
         "-Donnxruntime_ENABLE_WEBASSEMBLY_PROFILING=" + ("ON" if args.enable_wasm_profiling else "OFF"),
         "-Donnxruntime_WEBASSEMBLY_MALLOC=" + args.wasm_malloc,
         "-Donnxruntime_ENABLE_EAGER_MODE=" + ("ON" if args.build_eager_mode else "OFF"),
+        "-Donnxruntime_USE_XNNPACK=" + ("ON" if args.use_xnnpack else "OFF"),
         "-Donnxruntime_ENABLE_EXTERNAL_CUSTOM_OP_SCHEMAS=" + ("ON" if args.enable_external_custom_op_schemas
                                                               else "OFF"),
         "-Donnxruntime_NVCC_THREADS=" + str(args.parallel),
