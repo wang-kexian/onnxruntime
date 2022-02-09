@@ -36,11 +36,11 @@ jobs:
 
 
   - task: CmdLine@2
-        displayName: 'Check Variable'
-        inputs:
-          script: |-
-            echo $(Agent.Name)
-            bash ./tools/ci_build/github/pai/pai_get_thread.sh $(Agent.Name)
+    displayName: 'Check Variable'
+    inputs:
+      script: |-
+        echo $(Agent.Name)
+        bash ./tools/ci_build/github/pai/pai_get_thread.sh $(Agent.Name)
     target: host
 
   - script: |-
