@@ -27,10 +27,14 @@ namespace {
 //       type - the associated TypeProto
 //       returns true if traversal should continue, false otherwise
 template <typename ParamFilterFn, typename TraverseFn>
-void TraverseFormalParametersWithTypeProto(const Node& node,
+bool TraverseFormalParametersWithTypeProto(const Node& node,
                                            ParamFilterFn param_filter_fn,
                                            TraverseFn traverse_fn) {
   const ONNX_NAMESPACE::OpSchema& op_schema = *node.Op();
+
+  // was the param name matched in either inputs or outputs. this validates the name was valid.
+  // other checks match the content of the parameter if found.
+  bool matched = false;
 
   // process inputs:
   const size_t len = node.InputArgCount().size();
@@ -39,11 +43,12 @@ void TraverseFormalParametersWithTypeProto(const Node& node,
   for (size_t formal_index = 0; formal_index != len; ++formal_index) {
     const auto& param = op_schema.inputs()[formal_index];
     if (param_filter_fn(param)) {
+      matched = true;
       // get type of any corresponding actual parameter, if present
       for (int i = 0, end = node.InputArgCount()[formal_index]; i < end; ++i) {
         const NodeArg* arg = node.InputDefs()[static_cast<size_t>(actual_index) + i];
         if (!arg->Exists()) continue;  // a missing optional argument
-        if (!traverse_fn(param, arg->TypeAsProto())) return;
+        if (!traverse_fn(param, arg->TypeAsProto())) return matched;
       }
     }
     actual_index += node.InputArgCount()[formal_index];
@@ -52,14 +57,31 @@ void TraverseFormalParametersWithTypeProto(const Node& node,
   // process outputs:
   auto actual_outputs = node.OutputDefs();
   const auto num_actual_outputs = actual_outputs.size();
-  const auto last_formal = op_schema.outputs().size() - 1;
-  for (size_t i = 0; i != num_actual_outputs; ++i) {
-    const auto& formal = op_schema.outputs()[std::min(i, last_formal)];
+  const auto& schema_outputs = op_schema.outputs();
+  const auto last_formal = schema_outputs.size() - 1;
+  size_t i = 0;
+  for (; i != num_actual_outputs; ++i) {
+    const auto& formal = schema_outputs[std::min(i, last_formal)];
     if (!param_filter_fn(formal)) continue;
+    matched = true;
     const NodeArg* arg = actual_outputs[i];
     if (!arg->Exists()) continue;
-    if (!traverse_fn(formal, arg->TypeAsProto())) return;
+    if (!traverse_fn(formal, arg->TypeAsProto())) return matched;
   }
+
+  // missing optional outputs. check if type constraint name was valid if we haven't matched anything yet.
+  if (!matched) {
+    while (i <= last_formal) {
+      if (param_filter_fn(schema_outputs[i])) {
+        matched = true;
+        break;
+      }
+
+      ++i;
+    }
+  }
+
+  return matched;
 }
 
 class TypeBindingResolver {
@@ -81,29 +103,46 @@ class TypeBindingResolver {
     }
   }
 
-  // Resolves a name to a TypeProto* for a given node.
-  // The name can represent either a type parameter or an input/output parameter.
-  // Returns the resolved TypeProto* or nullptr if unable to resolve.
+  // Resolves a type constraint name to a TypeProto* for a given node. ONNX code checks that all usages of the type
+  // constraint name by the node are consistent, so we just need to match the first usage to see the actual type
+  // being used by the node. e.g. if type constraint 'T' allows float and double, any input or output for that node
+  // that has constraint 'T' must use the same type, be that float or double.
+  //
+  // Also can resolve an input/output name to a contraint when a type constraint name is not used.
+  // e.g. the 'shape' input of Reshape has a directly specified constraint of 'tensor(int64)'.
+  //
+  // Returns the resolved TypeProto* or nullptr if unable to resolve due to the
+  // constraint being for a missing optional output.
   const ONNX_NAMESPACE::TypeProto* Resolve(const std::string& name_or_type_str) const {
+    const ONNX_NAMESPACE::TypeProto* result{};
+    bool matched = false;
+
     // lookup if available
     if (type_binding_map_) {
       auto found_it = type_binding_map_->find(name_or_type_str);
-      if (found_it == type_binding_map_->end()) return nullptr;
-      return found_it->second;
+      matched = found_it != type_binding_map_->end();
+      if (matched) {
+        result = found_it->second;
+      }
     }
 
-    // fall back to node parameter traversal
-    const ONNX_NAMESPACE::TypeProto* result{};
-    TraverseFormalParametersWithTypeProto(
-        node_,
-        [&name_or_type_str](const ONNX_NAMESPACE::OpSchema::FormalParameter& param) -> bool {
-          return param.GetName() == name_or_type_str || param.GetTypeStr() == name_or_type_str;
-        },
-        [&result](const ONNX_NAMESPACE::OpSchema::FormalParameter&,
-                  const ONNX_NAMESPACE::TypeProto* type) -> bool {
-          result = type;
-          return false;
-        });
+    if (!matched) {
+      // fall back to node parameter traversal
+      matched = TraverseFormalParametersWithTypeProto(
+          node_,
+          [&name_or_type_str](const ONNX_NAMESPACE::OpSchema::FormalParameter& param) -> bool {
+            return param.GetTypeStr() == name_or_type_str || param.GetName() == name_or_type_str;
+          },
+          [&result](const ONNX_NAMESPACE::OpSchema::FormalParameter&,
+                    const ONNX_NAMESPACE::TypeProto* type) -> bool {
+            result = type;
+            return false;
+          });
+    }
+
+    // invalid kernel def that doesn't match schema
+    ORT_ENFORCE(matched, name_or_type_str, " constraint was not found for ", node_.OpType());
+
     return result;
   }
 

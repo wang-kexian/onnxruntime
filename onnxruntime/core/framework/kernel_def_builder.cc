@@ -147,11 +147,16 @@ bool KernelDef::IsConflict(const KernelDef& other) const {
 
 KernelDefBuilder& KernelDefBuilder::SetName(const std::string& op_name) {
   kernel_def_->op_name_ = op_name;
+  if (op_name == "MaxPool")
+    kernel_def_->op_name_ = std::string("MaxPool");
   return *this;
 }
 
 KernelDefBuilder& KernelDefBuilder::SetName(const char* op_name) {
   kernel_def_->op_name_ = std::string(op_name);
+  if (std::string(op_name) == "MaxPool")
+    kernel_def_->op_name_ = std::string("MaxPool");
+    
   return *this;
 }
 

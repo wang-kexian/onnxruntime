@@ -82,7 +82,6 @@ ONNX_OPERATOR_VERSIONED_KERNEL_EX(Scan,
                                   9, 10,
                                   kCudaExecutionProvider,
                                   (*KernelDefBuilder::Create())
-                                      .TypeConstraint("I", DataTypeImpl::GetTensorType<int64_t>())
                                       .TypeConstraint("V", DataTypeImpl::AllFixedSizeTensorTypes()),
                                   Scan<9>);
 
@@ -92,7 +91,6 @@ ONNX_OPERATOR_KERNEL_EX(Scan,
                         11,
                         kCudaExecutionProvider,
                         (*KernelDefBuilder::Create())
-                            .TypeConstraint("I", DataTypeImpl::GetTensorType<int64_t>())
                             .TypeConstraint("V", DataTypeImpl::AllFixedSizeTensorTypes()),
                         Scan<9>);
 
