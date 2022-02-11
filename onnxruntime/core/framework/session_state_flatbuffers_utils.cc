@@ -83,18 +83,18 @@ Status FbsSessionStateViewer::GetSubgraphSessionState(NodeIndex node_idx, const 
 void UpdateHashForBackwardsCompatibility(HashValue& hash) {
   // map of old hash to pair of new hash and op info
   static const std::unordered_map<HashValue, std::pair<HashValue, std::string>> hashes{
-      {2832535737534577496, {16708009824840936392, OPINFO(kOnnxDomain, Dropout, 7)}},
-      {12198479371038564912, {1718418059112844640, OPINFO(kOnnxDomain, Scan, 9)}},
-      {2560955351529676608, {3668627007850399040, OPINFO(kOnnxDomain, Scan, 11)}},
-      {10232409728231027688, {5212043150202938416, OPINFO(kOnnxDomain, Not, 1)}},
-      {11912523891622051440, {10225383741733918632, OPINFO(kOnnxDomain, RoiAlign, 10)}},  // RoiAlign 10 float
-      {18084231515768318048, {17022700455473327752, OPINFO(kOnnxDomain, RoiAlign, 10)}},  // RoiAlign 10 double
-      {14033689580222898712, {634727773751317256, OPINFO(kOnnxDomain, GatherND, 11)}},
-      {646512416908411600, {3064028185911332496, OPINFO(kOnnxDomain, GatherND, 12)}},
-      {15019893097608892000, {11311962292460032936, OPINFO(kOnnxDomain, GatherND, 13)}},
+      {2832535737534577496ULL, {16708009824840936392ULL, OPINFO(kOnnxDomain, Dropout, 7)}},
+      {12198479371038564912ULL, {1718418059112844640ULL, OPINFO(kOnnxDomain, Scan, 9)}},
+      {2560955351529676608ULL, {3668627007850399040ULL, OPINFO(kOnnxDomain, Scan, 11)}},
+      {10232409728231027688ULL, {5212043150202938416ULL, OPINFO(kOnnxDomain, Not, 1)}},
+      {11912523891622051440ULL, {10225383741733918632ULL, OPINFO(kOnnxDomain, RoiAlign, 10)}},  // RoiAlign 10 float
+      {18084231515768318048ULL, {17022700455473327752ULL, OPINFO(kOnnxDomain, RoiAlign, 10)}},  // RoiAlign 10 double
+      {14033689580222898712ULL, {634727773751317256ULL, OPINFO(kOnnxDomain, GatherND, 11)}},
+      {646512416908411600ULL, {3064028185911332496ULL, OPINFO(kOnnxDomain, GatherND, 12)}},
+      {15019893097608892000ULL, {11311962292460032936ULL, OPINFO(kOnnxDomain, GatherND, 13)}},
       // contrib ops
-      {7642430665819070720, {8620498355864235632, OPINFO(kMSDomain, CropAndResize, 1)}},
-      {1501966609334176828, {11924582339825775592, OPINFO(kMSDomain, GridSample, 1)}}};
+      {7642430665819070720ULL, {8620498355864235632ULL, OPINFO(kMSDomain, CropAndResize, 1)}},
+      {1501966609334176828ULL, {11924582339825775592ULL, OPINFO(kMSDomain, GridSample, 1)}}};
 
   auto iter = hashes.find(hash);
   if (iter != hashes.cend()) {

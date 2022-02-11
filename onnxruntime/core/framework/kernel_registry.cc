@@ -146,7 +146,9 @@ class TypeBindingResolver {
 // in the unit tests, so issues may be missed and the model may still work (e.g. matches the correct kernel by chance).
 // throw in a debug build so the issue is obvious and can be fixed.
 #ifdef NDEBUG
-    LOGS_DEFAULT(WARNING) << name_or_type_str << " constraint was not found for " << node_.OpType();
+    if (!matched) {
+      LOGS_DEFAULT(WARNING) << name_or_type_str << " constraint was not found for " << node_.OpType();
+    }
 #else
     ORT_ENFORCE(matched, name_or_type_str, " constraint was not found for ", node_.OpType());
 #endif
