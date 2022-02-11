@@ -4,6 +4,7 @@
 #pragma once
 
 #include <string>
+#include <optional>
 
 #include "core/common/common.h"
 #include "core/flatbuffers/schema/ort.fbs.h"
@@ -77,5 +78,11 @@ class FbsSessionStateViewer {
  private:
   const fbs::SessionState& fbs_session_state_;
 };
+
+/**
+* Get replacement hash for backwards compatibility if we had to modify an existing kernel registration.
+* @param hash Hash to update if needed. 
+*/
+void UpdateHashForBackwardsCompatibility(HashValue& hash);
 
 }  // namespace onnxruntime::fbs::utils

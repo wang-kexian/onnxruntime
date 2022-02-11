@@ -47,7 +47,10 @@ FbsSessionStateViewer::NodeKernelInfo FbsSessionStateViewer::GetNodeKernelInfo(I
   const auto* const fbs_node_indices = fbs_kcis->node_indices();
   const auto* const fbs_kernel_def_hashes = fbs_kcis->kernel_def_hashes();
 
-  return {fbs_node_indices->Get(idx), fbs_kernel_def_hashes->Get(idx)};
+  HashValue hash = fbs_kernel_def_hashes->Get(idx);
+  UpdateHashForBackwardsCompatibility(hash);
+
+  return {fbs_node_indices->Get(idx), hash};
 }
 
 FbsSessionStateViewer::Index FbsSessionStateViewer::GetNumNodeKernelInfos() const {
@@ -72,6 +75,32 @@ Status FbsSessionStateViewer::GetSubgraphSessionState(NodeIndex node_idx, const 
 
   fbs_subgraph_session_state_out = fbs_subgraph_session_state;
   return Status::OK();
+}
+
+#define SEP ":"
+#define OPINFO(d, o, s) #d SEP #o SEP #s
+
+void UpdateHashForBackwardsCompatibility(HashValue& hash) {
+  // map of old hash to pair of new hash and op info
+  static const std::unordered_map<HashValue, std::pair<HashValue, std::string>> hashes{
+      {2832535737534577496, {16708009824840936392, OPINFO(kOnnxDomain, Dropout, 7)}},
+      {12198479371038564912, {1718418059112844640, OPINFO(kOnnxDomain, Scan, 9)}},
+      {2560955351529676608, {3668627007850399040, OPINFO(kOnnxDomain, Scan, 11)}},
+      {10232409728231027688, {5212043150202938416, OPINFO(kOnnxDomain, Not, 1)}},
+      {11912523891622051440, {10225383741733918632, OPINFO(kOnnxDomain, RoiAlign, 10)}},  // RoiAlign 10 float
+      {18084231515768318048, {17022700455473327752, OPINFO(kOnnxDomain, RoiAlign, 10)}},  // RoiAlign 10 double
+      {14033689580222898712, {634727773751317256, OPINFO(kOnnxDomain, GatherND, 11)}},
+      {646512416908411600, {3064028185911332496, OPINFO(kOnnxDomain, GatherND, 12)}},
+      {15019893097608892000, {11311962292460032936, OPINFO(kOnnxDomain, GatherND, 13)}},
+      // contrib ops
+      {7642430665819070720, {8620498355864235632, OPINFO(kMSDomain, CropAndResize, 1)}},
+      {1501966609334176828, {11924582339825775592, OPINFO(kMSDomain, GridSample, 1)}}};
+
+  auto iter = hashes.find(hash);
+  if (iter != hashes.cend()) {
+    // hash was updated in newer version of ORT kernel registrations
+    hash = iter->second.first;
+  }
 }
 
 }  // namespace onnxruntime::fbs::utils

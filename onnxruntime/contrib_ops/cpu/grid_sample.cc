@@ -171,7 +171,6 @@ Status GridSample<T>::Compute(OpKernelContext* context) const {
   float x_min = -0.5f;
   float x_max = W_in - 0.5f;
   float y_min = -0.5f;
-  ;
   float y_max = H_in - 0.5f;
 
   if (align_corners_) {

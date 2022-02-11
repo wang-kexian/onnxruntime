@@ -304,5 +304,4 @@ Status LoadAttributeOrtFormat(const fbs::Attribute& fbs_attr,
 
   return Status::OK();
 }
-
 }  // namespace onnxruntime::fbs::utils

@@ -156,7 +156,7 @@ KernelDefBuilder& KernelDefBuilder::SetName(const char* op_name) {
   kernel_def_->op_name_ = std::string(op_name);
   if (std::string(op_name) == "MaxPool")
     kernel_def_->op_name_ = std::string("MaxPool");
-    
+
   return *this;
 }
 

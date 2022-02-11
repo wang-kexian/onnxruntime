@@ -51,7 +51,7 @@ ONNX_CPU_OPERATOR_KERNEL(
     13,
     KernelDefBuilder()
         .TypeConstraint("T", DataTypeImpl::AllTensorTypes())
-        .TypeConstraint("Tind", DataTypeImpl::GetTensorType<int64_t>()),
+        .TypeConstraint("indices", DataTypeImpl::GetTensorType<int64_t>()),
     GatherND);
 
 template <typename Tind>

@@ -339,6 +339,9 @@ Status KernelRegistry::Register(KernelCreateInfo&& create_info) {
 
   // check for existing hash conflict
   const auto kernel_def_hash = create_info.kernel_def->GetHash();
+  if (kernel_def_hash_lookup_.find(kernel_def_hash) != kernel_def_hash_lookup_.end()) {
+    (void)create_info.kernel_def->GetHash();
+  }
   ORT_RETURN_IF(kernel_def_hash_lookup_.find(kernel_def_hash) != kernel_def_hash_lookup_.end(),
                 "Failed to add kernel for " + key + ": Conflict with existing kernel def hash.");
 
