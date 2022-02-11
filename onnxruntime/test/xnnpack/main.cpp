@@ -7,6 +7,7 @@
 
 #include <array>
 #include <algorithm>
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -14,9 +15,9 @@
 #include <core/graph/model.h>
 #include <core/session/ort_env.h>
 extern "C" {
-unsigned char mobilenet_mobilenet_v1_1_0_224_onnx[];
+extern unsigned char mobilenet_mobilenet_v1_1_0_224_onnx[];
 extern unsigned int mobilenet_mobilenet_v1_1_0_224_onnx_len;
-unsigned char input_0_bin[];
+extern unsigned char input_0_bin[];
 extern unsigned int input_0_bin_len;
 }
 using namespace onnxruntime;
@@ -31,7 +32,7 @@ typedef std::vector<std::unique_ptr<xnn_operator, decltype(&xnn_delete_operator)
  */
 static void chw_to_hwc(const float* input, size_t h, size_t w, size_t channels, float* output_data) {
   size_t stride = h * w;
-  for (int c = 0; c != channels; ++c) {
+  for (size_t c = 0; c != channels; ++c) {
     size_t t = c * stride;
     for (size_t i = 0; i != stride; ++i) {
       float f = input[t + i];
@@ -79,7 +80,7 @@ void LoadWeight(Graph& graph, const char* tensor_name, float* data, size_t lengt
 
 ExecutionPlan FP32MobileNetV1(pthreadpool_t threadpool, std::shared_ptr<onnxruntime::Model>& onnx_model, float* v29) {
   alignas(16) static std::array<float, 150528> v0;
-  assert(v0.size() * sizeof(float) == input_0_bin_len);
+  ORT_ENFORCE(v0.size() * sizeof(float) == input_0_bin_len);
   memcpy(v0.data(), input_0_bin, input_0_bin_len);
   alignas(16) static std::array<float, 401408> v1;
   alignas(16) static std::array<float, 401408> v2;
@@ -1149,6 +1150,7 @@ ExecutionPlan FP32MobileNetV1(pthreadpool_t threadpool, std::shared_ptr<onnxrunt
 }
 
 int main() {
+  std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
   OrtEnv::LoggingManagerConstructionInfo lm_info{nullptr, nullptr, ORT_LOGGING_LEVEL_INFO, "default"};
   Status status;
   OrtEnv* env = OrtEnv::GetInstance(lm_info, status);
@@ -1171,6 +1173,11 @@ int main() {
     ORT_ENFORCE(xnn_run_operator(op.get(), threadpool.get()) == xnn_status_success);
   }
   auto max_index = std::max_element(v29.begin(), v29.end()) - v29.begin();
-  assert(max_index == 231);
+  ORT_ENFORCE(max_index == 231);
+
+  std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+  std::cout << "Elapsed time: "
+            << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
+            << "[µs]" << std::endl;
   return 0;
 }

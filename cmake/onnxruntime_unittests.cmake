@@ -1312,6 +1312,12 @@ if(FALSE)
         XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
     )
     endif()
+    if (onnxruntime_BUILD_WEBASSEMBLY)
+      set_target_properties(onnxruntime_xnnpack_test PROPERTIES LINK_FLAGS "-s ALLOW_MEMORY_GROWTH=1 -s EXIT_RUNTIME=1 -s TOTAL_MEMORY=67108864")
+      if (onnxruntime_ENABLE_WEBASSEMBLY_THREADS)
+        set_property(TARGET onnxruntime_xnnpack_test APPEND_STRING PROPERTY LINK_FLAGS " -s USE_PTHREADS=1 -s PROXY_TO_PTHREAD=1")
+      endif()
+    endif()
     target_include_directories(onnxruntime_xnnpack_test PRIVATE ${ONNXRUNTIME_ROOT}
             ${CMAKE_CURRENT_BINARY_DIR})
     target_link_libraries(onnxruntime_xnnpack_test PRIVATE  onnxruntime_session
