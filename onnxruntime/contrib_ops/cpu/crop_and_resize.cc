@@ -22,7 +22,7 @@ limitations under the License.
 #include "core/framework/tensor.h"
 #include "core/platform/threadpool.h"
 #include "core/providers/cpu/object_detection/roialign.h"
-//TODO: fix the warnings
+// TODO: fix the warnings
 #if defined(_MSC_VER) && !defined(__clang__)
 // Chance of arithmetic overflow could be reduced
 #pragma warning(disable : 26451)
@@ -64,7 +64,8 @@ void CropAndResizeForward(const TensorShape& output_shape,
   int64_t pooled_width = output_shape[3];
 
   ThreadPool::TryBatchParallelFor(
-      ttp, static_cast<int32_t>(n_rois), [&](ptrdiff_t n) {
+      ttp, static_cast<int32_t>(n_rois),
+      [&](ptrdiff_t n) {
         int64_t index_n = n * channels * pooled_width * pooled_height;
 
         const T* offset_bottom_rois = bottom_rois + n * num_roi_cols;
@@ -196,7 +197,7 @@ Status CropAndResize<T>::Compute(OpKernelContext* context) const {
   const auto& batch_indices_dims = batch_indices_ptr->Shape();
   const auto& crop_size_dims = crop_size_ptr->Shape();
 
-  //validate crop_size
+  // validate crop_size
   if (crop_size_dims.NumDimensions() != 1) {
     return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
                   "Number of dimensions for crop size should be exactly 1");

@@ -120,30 +120,6 @@ Status GatherNDBase::PrepareCompute(
           .TypeConstraint("indices", DataTypeImpl::GetTensorType<TIndex>()),                                   \
       GatherND<TIndex>);
 
-// TODO: decprecate GatherND-1 after updating training models to opset-12
-#ifdef ENABLE_TRAINING
-// GatherND was a contrib op until opset 11 of ONNX. Contrib op has Tind constraint and supports int32_t and int64_t
-// indices. ONNX GatherND only supports int64_t indices.
-#define REGISTER_KERNEL_TYPED_CONTRIB_GATHER_ND(TIndex)                   \
-  ONNX_OPERATOR_TYPED_KERNEL_EX(                                          \
-      GatherND,                                                           \
-      kMSDomain,                                                          \
-      1,                                                                  \
-      TIndex,                                                             \
-      kCudaExecutionProvider,                                             \
-      (*KernelDefBuilder::Create())                                       \
-          .TypeConstraint("T",                                            \
-                          std::vector<MLDataType>{                        \
-                              DataTypeImpl::GetTensorType<float>(),       \
-                              DataTypeImpl::GetTensorType<double>(),      \
-                              DataTypeImpl::GetTensorType<MLFloat16>(),   \
-                              DataTypeImpl::GetTensorType<int64_t>(),     \
-                              DataTypeImpl::GetTensorType<bool>(),        \
-                          })                                              \
-          .TypeConstraint("Tind", DataTypeImpl::GetTensorType<TIndex>()), \
-      GatherND<TIndex>);
-REGISTER_KERNEL_TYPED_CONTRIB_GATHER_ND(int64_t)
-#endif
 REGISTER_KERNEL_TYPED_GATHER_ND(int64_t, 13)
 REGISTER_KERNEL_VERSIONED_TYPED_GATHER_ND(int64_t, 12, 12)
 REGISTER_KERNEL_VERSIONED_TYPED_GATHER_ND(int64_t, 11, 11)

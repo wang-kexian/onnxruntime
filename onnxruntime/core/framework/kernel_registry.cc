@@ -32,8 +32,10 @@ bool TraverseFormalParametersWithTypeProto(const Node& node,
                                            TraverseFn traverse_fn) {
   const ONNX_NAMESPACE::OpSchema& op_schema = *node.Op();
 
-  // was the param name matched in either inputs or outputs. this validates the name was valid.
-  // other checks match the content of the parameter if found.
+  // was the param name matched in either inputs, outputs or type constraints. 
+  // this validates the name was valid.and that the type involved will be returned if available.
+  // if the name is invalid we do not return a type, and any applicable type constraint can not be applied 
+  // in VerifyKernelDef.
   bool matched = false;
 
   // process inputs:
@@ -144,7 +146,7 @@ class TypeBindingResolver {
 // actually applied, making the kernel def misleading and potentially matching an unexpected/incorrect kernel.
 // warn in a release build as we do not have covereage of every single opset for every single operator
 // in the unit tests, so issues may be missed and the model may still work (e.g. matches the correct kernel by chance).
-// throw in a debug build so the issue is obvious and can be fixed.
+// throw in a debug build so the issue is obvious and force it to be fixed.
 #ifdef NDEBUG
     if (!matched) {
       LOGS_DEFAULT(WARNING) << name_or_type_str << " constraint was not found for " << node_.OpType();
@@ -348,9 +350,6 @@ Status KernelRegistry::Register(KernelCreateInfo&& create_info) {
 
   // check for existing hash conflict
   const auto kernel_def_hash = create_info.kernel_def->GetHash();
-  if (kernel_def_hash_lookup_.find(kernel_def_hash) != kernel_def_hash_lookup_.end()) {
-    (void)create_info.kernel_def->GetHash();
-  }
   ORT_RETURN_IF(kernel_def_hash_lookup_.find(kernel_def_hash) != kernel_def_hash_lookup_.end(),
                 "Failed to add kernel for " + key + ": Conflict with existing kernel def hash.");
 

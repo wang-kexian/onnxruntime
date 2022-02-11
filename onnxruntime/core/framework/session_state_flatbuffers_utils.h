@@ -4,7 +4,6 @@
 #pragma once
 
 #include <string>
-#include <optional>
 
 #include "core/common/common.h"
 #include "core/flatbuffers/schema/ort.fbs.h"

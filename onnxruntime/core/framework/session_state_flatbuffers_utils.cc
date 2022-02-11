@@ -81,7 +81,9 @@ Status FbsSessionStateViewer::GetSubgraphSessionState(NodeIndex node_idx, const 
 #define OPINFO(d, o, s) #d SEP #o SEP #s
 
 void UpdateHashForBackwardsCompatibility(HashValue& hash) {
-  // map of old hash to pair of new hash and op info
+  // map of old hash to pair of new hash and op info. we store the op info so it's easy to debug what we're matching.
+  // we could take domain/optype/opset as input to validate the match, 
+  // but hashes should be unique and doing so shouldn't be necessary.
   static const std::unordered_map<HashValue, std::pair<HashValue, std::string>> hashes{
       {2832535737534577496ULL, {16708009824840936392ULL, OPINFO(kOnnxDomain, Dropout, 7)}},
       {12198479371038564912ULL, {1718418059112844640ULL, OPINFO(kOnnxDomain, Scan, 9)}},

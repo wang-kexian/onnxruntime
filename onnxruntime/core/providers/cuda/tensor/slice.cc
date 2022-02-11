@@ -7,8 +7,8 @@
 
 namespace onnxruntime {
 namespace cuda {
-// this really doesn't need to be a typed registration as the indices came from attributes and could only be int64.
-// leaving as in maintain original incorrect registration setup.
+// this really doesn't need to be a typed registration as the indices come from attributes and can only be int64.
+// leaving as in maintain original incorrect registration setup (pre 02/2022).
 #define REGISTER_VERSIONED_TYPED_SLICE(TIND)                             \
   ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                               \
       Slice,                                                             \
