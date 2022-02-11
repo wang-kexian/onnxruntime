@@ -140,9 +140,16 @@ class TypeBindingResolver {
           });
     }
 
-    // invalid kernel def that doesn't match schema
+// invalid kernel def with type constraints that don't match the schema. this means the type constraints are not
+// actually applied, making the kernel def misleading and potentially matching an unexpected/incorrect kernel.
+// warn in a release build as we do not have covereage of every single opset for every single operator
+// in the unit tests, so issues may be missed and the model may still work (e.g. matches the correct kernel by chance).
+// throw in a debug build so the issue is obvious and can be fixed.
+#ifdef NDEBUG
+    LOGS_DEFAULT(WARNING) << name_or_type_str << " constraint was not found for " << node_.OpType();
+#else
     ORT_ENFORCE(matched, name_or_type_str, " constraint was not found for ", node_.OpType());
-
+#endif
     return result;
   }
 
