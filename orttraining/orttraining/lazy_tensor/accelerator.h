@@ -3,8 +3,8 @@
 
 #include <torch/csrc/jit/ir/ir.h>
 #include <torch/csrc/jit/runtime/argument_spec.h>
+#include "core/session/inference_session.h"
 #include "core/session/onnxruntime_cxx_api.h"
-#include "orttraining/core/session/training_session.h"
 
 namespace onnxruntime {
 namespace lazytensor {
@@ -15,7 +15,7 @@ struct CompiledObject {
   // It processes tensors across ORT and Pytorch and invokes "sess".
   std::function<std::vector<c10::IValue>(at::ArrayRef<c10::IValue>&)> code;
   // Session used in the "code" above.
-  std::unique_ptr<onnxruntime::training::TrainingSession> sess;
+  std::unique_ptr<onnxruntime::InferenceSession> sess;
 };
 
 // Custom JIT engine called by Pytorch.

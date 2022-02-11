@@ -9,27 +9,35 @@ c10::ScalarType CreateC10ScalarType(const onnxruntime::PrimitiveDataTypeBase* el
   ORT_ENFORCE(elem_type, "Element type pointer cannot be NULL.");
   switch (static_cast<ONNX_NAMESPACE::TensorProto_DataType>(elem_type->GetDataType())) {
     case onnxruntime::data_types_internal::ToTensorDataType<float>(): {
+      std::cout << "Create at float tensor" << std::endl;
       return c10::kFloat;
     }
     case onnxruntime::data_types_internal::ToTensorDataType<double>(): {
+      std::cout << "Create at double tensor" << std::endl;
       return c10::kDouble;
     }
     case onnxruntime::data_types_internal::ToTensorDataType<onnxruntime::MLFloat16>(): {
+      std::cout << "Create at MLFloat16 tensor" << std::endl;
       return at::kHalf;
     }
     case onnxruntime::data_types_internal::ToTensorDataType<onnxruntime::BFloat16>(): {
+      std::cout << "Create at BFloat16 tensor" << std::endl;
       return c10::kBFloat16;
     }
     case onnxruntime::data_types_internal::ToTensorDataType<bool>(): {
+      std::cout << "Create at bool tensor" << std::endl;
       return at::kBool;
     }
     case onnxruntime::data_types_internal::ToTensorDataType<int16_t>(): {
+      std::cout << "Create at int16_t tensor" << std::endl;
       return at::kShort;
     }
     case onnxruntime::data_types_internal::ToTensorDataType<int>(): {
+      std::cout << "Create at int tensor" << std::endl;
       return at::kInt;
     }
     case onnxruntime::data_types_internal::ToTensorDataType<int64_t>(): {
+      std::cout << "Create at int64_t tensor" << std::endl;
       return at::kLong;
     }
     default:
@@ -41,20 +49,28 @@ onnxruntime::MLDataType CreateOrtScalarType(
     at::ScalarType dtype) {
   switch (dtype) {
     case at::kFloat:
+      std::cout << "Create ORT input Float tensor" << std::endl;
       return onnxruntime::DataTypeImpl::GetType<float>();
     case at::kDouble:
+      std::cout << "Create ORT input Double tensor" << std::endl;
       return onnxruntime::DataTypeImpl::GetType<double>();
     case at::kHalf:
+      std::cout << "Create ORT input Half tensor" << std::endl;
       return onnxruntime::DataTypeImpl::GetType<onnxruntime::MLFloat16>();
     case at::kBFloat16:
+      std::cout << "Create ORT input BFloat16 tensor" << std::endl;
       return onnxruntime::DataTypeImpl::GetType<onnxruntime::BFloat16>();
     case at::kInt:
+      std::cout << "Create ORT input Int tensor" << std::endl;
       return onnxruntime::DataTypeImpl::GetType<int>();
     case at::kShort:
+      std::cout << "Create ORT input Short tensor" << std::endl;
       return onnxruntime::DataTypeImpl::GetType<int16_t>();
     case at::kLong:
+      std::cout << "Create ORT input Long tensor" << std::endl;
       return onnxruntime::DataTypeImpl::GetType<int64_t>();
     case at::kBool:
+      std::cout << "Create ORT input Bool tensor" << std::endl;
       return onnxruntime::DataTypeImpl::GetType<bool>();
     default:
       ORT_THROW("Unsupport aten scalar type: ", dtype);
@@ -161,6 +177,176 @@ c10::IValue CreateC10IvalueTensor(OrtValue value) {
       options);
 
   return c10::IValue(new_tensor);
+}
+
+OrtValue CreateOrtScalarValue(const at::Scalar& scalar) {
+  // This tensor's life time is controlled by Pytorch.
+  // TODO: consider to let ORT also own that tensor.
+  void* data_ptr = nullptr;
+  std::function<void()> data_deleter;
+  switch (scalar.type()) {
+    case at::kFloat: {
+      std::cout << "Create ORT float" << std::endl;
+      data_ptr = new float;
+      *reinterpret_cast<float*>(data_ptr) = scalar.toFloat();
+      data_deleter = [=]() {
+        delete reinterpret_cast<float*>(data_ptr);
+      };
+      break;
+    }
+    case at::kDouble: {
+      std::cout << "Create ORT double" << std::endl;
+      data_ptr = new double;
+      *reinterpret_cast<double*>(data_ptr) = scalar.toDouble();
+      data_deleter = [=]() {
+        delete reinterpret_cast<double*>(data_ptr);
+      };
+      break;
+    }
+    case at::kBFloat16: {
+      std::cout << "Create ORT BFloat16" << std::endl;
+      at::BFloat16 valBFloat16 = scalar.toBFloat16();
+      onnxruntime::BFloat16 *valOrtBFloat16 = reinterpret_cast<onnxruntime::BFloat16*>(&valBFloat16);
+      data_ptr = new onnxruntime::BFloat16;
+      *reinterpret_cast<onnxruntime::BFloat16*>(data_ptr) = *valOrtBFloat16;
+      data_deleter = [=]() {
+        delete reinterpret_cast<onnxruntime::BFloat16*>(data_ptr);
+      };
+      break;
+    }
+    case at::kShort: {
+      std::cout << "Create ORT Short" << std::endl;
+      data_ptr = new int16_t;
+      *reinterpret_cast<int16_t*>(data_ptr) = scalar.toShort();
+      data_deleter = [=]() {
+        delete reinterpret_cast<int16_t*>(data_ptr);
+      };
+      break;
+    }
+    case at::kInt: {
+      std::cout << "Create ORT Int" << std::endl;
+      data_ptr = new int;
+      *reinterpret_cast<int*>(data_ptr) = scalar.toInt();
+      data_deleter = [=]() {
+        delete reinterpret_cast<int*>(data_ptr);
+      };
+      break;
+    }
+    case at::kLong: {
+      std::cout << "Create ORT Long" << std::endl;
+      data_ptr = new int64_t;
+      *reinterpret_cast<int64_t*>(data_ptr) = scalar.toLong();
+      data_deleter = [=]() {
+        delete reinterpret_cast<int64_t*>(data_ptr);
+      };
+      break;
+    }
+    case at::kBool: {
+      std::cout << "Create ORT Bool" << std::endl;
+      data_ptr = new bool;
+      *reinterpret_cast<bool*>(data_ptr) = scalar.toBool();
+      data_deleter = [=]() {
+        delete reinterpret_cast<bool*>(data_ptr);
+      };
+      break;
+    } default:
+      ORT_THROW("Unsupport aten scalar type: ", scalar.type());
+  }
+
+  OrtDevice cpu_device = CreateOrtDevice(c10::Device(c10::DeviceType::CPU));
+  OrtMemoryInfo memory_info = OrtMemoryInfo("LTC", OrtAllocatorType::OrtDeviceAllocator, cpu_device, cpu_device.Id());
+
+  onnxruntime::MLDataType element_type = CreateOrtScalarType(scalar.type());
+  onnxruntime::TensorShape shape({});
+  std::unique_ptr<onnxruntime::Tensor> ort_tensor = std::make_unique<onnxruntime::Tensor>(
+      element_type, shape,
+      data_ptr, memory_info);
+
+  std::function<void(void*)> deleter = [=](void* p) {
+   data_deleter();
+   onnxruntime::DataTypeImpl::GetType<onnxruntime::Tensor>()->GetDeleteFunc()(p);
+  };
+
+  OrtValue ort_value;
+  ort_value.Init(
+      ort_tensor.release(),
+      onnxruntime::DataTypeImpl::GetType<onnxruntime::Tensor>(),
+      deleter);
+  return ort_value;
+}
+
+c10::IValue CreateC10IvalueScalar(OrtValue value) {
+  onnxruntime::Tensor* tensor = value.GetMutable<onnxruntime::Tensor>();
+
+  // const OrtDevice& device = tensor->Location().device;
+  // Assert on CPU.
+
+  // at::Scalar must be on CPU.
+  // If ORT produce a scalar on GPU, we need to copy it to CPU and
+  // this code may need cuda.h dependency.
+  at::Scalar new_value;
+
+  auto options = torch::TensorOptions()
+                     .dtype(CreateC10ScalarType(tensor->DataType()->AsPrimitiveDataType()))
+                     .layout(torch::kStrided)
+                     .requires_grad(false);
+  at::Tensor new_value_ = at::empty({}, options);
+  std::cout << new_value_ << std::endl;
+  ORT_ENFORCE(tensor->Location().device.Type() == OrtDevice::CPU);
+  switch (static_cast<ONNX_NAMESPACE::TensorProto_DataType>(tensor->DataType()->AsPrimitiveDataType()->GetDataType())) {
+    case onnxruntime::data_types_internal::ToTensorDataType<float>(): {
+      std::cout << "Create at float" << std::endl;
+      new_value = at::Scalar(*tensor->Data<float>());
+      new_value_ = at::scalar_tensor(new_value);
+      break;
+    }
+    case onnxruntime::data_types_internal::ToTensorDataType<double>(): {
+      std::cout << "Create at double" << std::endl;
+      new_value = at::Scalar(*tensor->Data<double>());
+      new_value_ = at::scalar_tensor(new_value);
+      break;
+    }
+    case onnxruntime::data_types_internal::ToTensorDataType<onnxruntime::MLFloat16>(): {
+      std::cout << "Create at MLFloat16" << std::endl;
+      new_value = at::Scalar(*reinterpret_cast<const at::Half*>(tensor->DataRaw()));
+      new_value_ = at::scalar_tensor(new_value);
+      break;
+    }
+    case onnxruntime::data_types_internal::ToTensorDataType<onnxruntime::BFloat16>(): {
+      std::cout << "Create at BFloat16" << std::endl;
+      new_value = at::Scalar(*reinterpret_cast<const at::BFloat16*>(tensor->DataRaw()));
+      new_value_ = at::scalar_tensor(new_value);
+      break;
+    }
+    case onnxruntime::data_types_internal::ToTensorDataType<bool>(): {
+      std::cout << "Create at bool" << std::endl;
+      new_value = at::Scalar(*reinterpret_cast<const bool*>(tensor->DataRaw()));
+      new_value_ = at::scalar_tensor(new_value);
+      break;
+    }
+    case onnxruntime::data_types_internal::ToTensorDataType<int16_t>(): {
+      std::cout << "Create at int16_t" << std::endl;
+      new_value = at::Scalar(*reinterpret_cast<const int16_t*>(tensor->DataRaw()));
+      new_value_ = at::scalar_tensor(new_value);
+      break;
+    }
+    case onnxruntime::data_types_internal::ToTensorDataType<int>(): {
+      std::cout << "Create at int" << std::endl;
+      new_value = at::Scalar(*reinterpret_cast<const int*>(tensor->DataRaw()));
+      new_value_ = at::scalar_tensor(new_value);
+      break;
+    }
+    case onnxruntime::data_types_internal::ToTensorDataType<int64_t>(): {
+      std::cout << "Create at int64_t" << std::endl;
+      new_value = at::Scalar(*reinterpret_cast<const int64_t*>(tensor->DataRaw()));
+      new_value_ = at::scalar_tensor(new_value);
+      break;
+    }
+    default:
+      ORT_THROW("Unsupport aten scalar type.");
+  }
+
+  return c10::IValue(new_value_);
 }
 }  // namespace lazytensor
 }  // namespace onnxruntime

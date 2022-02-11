@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string>
 #include <torch/csrc/jit/passes/onnx.h>
+#include "torch/csrc/jit/passes/shape_analysis.h"
 #include <torch/torch.h>
 #include "bridge.h"
 #include "core/common/logging/sinks/clog_sink.h"
@@ -44,14 +45,22 @@ bool Accelerator::Supported(const torch::jit::Node* node) {
   }
 
   switch (node->kind()) {
-    //case aten::relu:
+    case aten::relu:
     case aten::mul:
     case aten::add:
     case aten::sub:
     case aten::div:
-    //case aten::gt:
-    //case aten::eq:
+    case aten::gt:
+    case aten::lt:
+    case aten::eq:
     case prim::Constant:
+    case aten::sqrt:
+    //case aten::size:
+    //case aten::addcmul:
+    case aten::permute:
+    case aten::mm:
+    case aten::ne:
+    //case aten::max_pool2d_with_indices:
       //case aten::threshold_backward:
       std::cout << "[compiler.cc] Support " << *node;  //<< std::endl;
       return true;
@@ -69,8 +78,6 @@ void Accelerator::Run(torch::jit::Stack& stack) {
   // Pop these inputs from the stack.
   at::ArrayRef<c10::IValue> inputs = torch::jit::last(stack, num_inputs);
 
-  std::cout << "JIT sub-graph: " << std::endl;
-  std::cout << *subgraph_ << std::endl;
   // If we haven't compiled for the shape/device of these inputs before,
   // do so now.
   torch::jit::CompleteArgumentSpec spec{false, at::ArrayRef<c10::IValue>(inputs)};
@@ -84,8 +91,7 @@ void Accelerator::Run(torch::jit::Stack& stack) {
   torch::jit::drop(stack, num_inputs);
 
   for (auto& output : outputs) {
-    auto var = torch::autograd::make_variable(output.toTensor());
-    stack.push_back(c10::IValue(var));
+    stack.push_back(output);
   }
 }
 
@@ -94,7 +100,7 @@ void Accelerator::CheckArgs(
   // TODO: remove this check.
   TORCH_CHECK(inputs.size(), "Need at least one input.");
   for (const auto& input : inputs) {
-    TORCH_CHECK(input.isTensor(), "Compiler can only handle Tensor inputs.");
+    TORCH_CHECK(input.isTensor() || input.isScalar(), "Compiler can only handle Tensor or Scalar inputs.");
   }
 }
 
@@ -114,6 +120,11 @@ void Accelerator::PropagateArgTypes(
     auto input_value = inputs[i];
     input_symbol->setType(input_value.type());
   }
+  std::cout << "JIT sub-graph: " << std::endl;
+  std::cout << *subgraph_ << std::endl;
+  torch::jit::PropagateInputShapes(subgraph_);
+  std::cout << "JIT sub-graph with shpaes: " << std::endl;
+  std::cout << *subgraph_ << std::endl;
 }
 
 // ONNX exporter is written in Python, so
@@ -134,12 +145,12 @@ static std::string ExportToOnnx(std::shared_ptr<torch::jit::Graph> graph) {
 
 // Create an empty session object.
 // Models will be loaded later.
-static std::unique_ptr<onnxruntime::training::TrainingSession> CreateSession() {
+static std::unique_ptr<onnxruntime::InferenceSession> CreateSession() {
   // Enviroment shared by all sessions.
   static onnxruntime::Environment& pybind_default_env = GetLtcEnv();
   // All sessions use the same config.
   static onnxruntime::SessionOptions sess_opts;
-  return std::make_unique<onnxruntime::training::TrainingSession>(sess_opts, pybind_default_env);
+  return std::make_unique<onnxruntime::InferenceSession>(sess_opts, pybind_default_env);
 }
 
 static OrtDevice CheckAndGetTensorDevice(at::ArrayRef<c10::IValue>& values) {
@@ -168,13 +179,17 @@ static OrtDevice CheckAndGetTensorDevice(at::ArrayRef<c10::IValue>& values) {
   return CreateOrtDevice(unique_tensor_device);
 }
 
+std::string GetC10TypeString(c10::IValue& value) {
+
+}
+
 CompiledObject Accelerator::Compile(
     torch::jit::CompleteArgumentSpec spec, at::ArrayRef<c10::IValue>& args) {
   CompiledObject compiled;
   // Assign an empty session.
   compiled.sess = CreateSession();
   // Let's get the empty session and initialize it.
-  onnxruntime::training::TrainingSession& sess = *compiled.sess;
+  onnxruntime::InferenceSession& sess = *compiled.sess;
 
   OrtCUDAProviderOptions provider_options{};
   provider_options.do_copy_in_default_stream = true;
@@ -204,42 +219,67 @@ CompiledObject Accelerator::Compile(
   // Assume all inputs and outputs are on the same device.
   OrtDevice shared_device = CheckAndGetTensorDevice(args);
   // Duplicate device info for each output tensor.
+  // TODO: Force scalar to be on CPU since at::Scalar is CPU value.
   std::vector<OrtDevice> fetches_device_info(fetch_names.size(), shared_device);
 
   auto code = [this, spec, run_options,
                feed_names, fetch_names,
-               fetches_device_info, &sess](at::ArrayRef<c10::IValue>& args) {
+               fetches_device_info, &sess, model_path](at::ArrayRef<c10::IValue>& args) {
     // Inputs of ORT session.
     std::vector<OrtValue> feeds;
     // Outputs of ORT session.
     std::vector<OrtValue> fetches;
+    std::cout << "Execute ONNX model " << model_path << std::endl;
 
     // Prepare inputs.
     const auto num_inputs = subgraph_->inputs().size();
     for (size_t i = 0; i < num_inputs; ++i) {
-      if (subgraph_->inputs().at(i)->type()->kind() == c10::TypeKind::TensorType) {
-        // Create ORT tensor from Pytorch tensor without copy.
+      // The value can be either tensor or scalar.
+      // Scalar is a tensor with empty shape vector.
+      // Create ORT tensor from Pytorch tensor without copy.
+      if (args.at(i).isScalar()) {
+        // Scalar.
+        // ORT_ENFORCE(subgraph_->inputs().at(i)->type()->kind() == c10::TypeKind::TensorType);
+        feeds.push_back(CreateOrtScalarValue(args.at(i).toScalar()));
+      } else if (args.at(i).isTensor()) {
+        // Tensor.
+        ORT_ENFORCE(subgraph_->inputs().at(i)->type()->kind() == c10::TypeKind::TensorType);
         feeds.push_back(CreateOrtTensorValue(args.at(i).toTensor()));
       } else {
-        // Looks like LTC only passes tensors into backend, so we don't care
+        // Looks like LTC only passes scalars and tensors into backend, so we don't care
         // other types for now.
         ORT_THROW("Only tensor inputs are supported.");
-      }
+      } 
     }
 
+    std::cout << "Run" << std::endl;
     // Inputs are ready. Let's run ORT.
     ORT_THROW_IF_ERROR(sess.Run(
         run_options,
         feed_names, feeds,
         fetch_names, &fetches, &fetches_device_info));
+    std::cout << "Run done" << std::endl;
 
     // Convert ORT output to Pytorch format.
     std::vector<c10::IValue> outputs;
     for (auto value : fetches) {
-      // Create Pytorch tensor from ORT tensor without copy.
-      outputs.push_back(std::move(CreateC10IvalueTensor(value)));
+      if (value.IsTensor()) {
+        onnxruntime::Tensor* tensor = value.GetMutable<onnxruntime::Tensor>();
+        const onnxruntime::TensorShape& tensor_shape = tensor->Shape();
+        if (tensor_shape.NumDimensions() > 0) {
+          // Create Pytorch tensor from ORT tensor without copy.
+          outputs.push_back(std::move(CreateC10IvalueTensor(value)));
+        } else if (tensor_shape.NumDimensions() == 0) {
+          outputs.push_back(std::move(CreateC10IvalueScalar(value)));
+        } else {
+          ORT_ENFORCE("Unsupported tensor shape.");
+        }
+      } else {
+        ORT_ENFORCE("Output must be tensor or scalar.");
+      }
     }
 
+    std::cout << "Execute ONNX model done" << model_path << std::endl;
     return outputs;
   };
 

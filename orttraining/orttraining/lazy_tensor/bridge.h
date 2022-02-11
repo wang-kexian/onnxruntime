@@ -24,5 +24,8 @@ OrtValue CreateOrtTensorValue(const at::Tensor& tensor);
 // The created at::Tensor and onnxruntime::Tensor have
 // the same lifetime.
 c10::IValue CreateC10IvalueTensor(OrtValue value);
+
+OrtValue CreateOrtScalarValue(const at::Scalar& scalar);
+c10::IValue CreateC10IvalueScalar(OrtValue value);
 }  // namespace lazytensor
 }  // namespace onnxruntime
