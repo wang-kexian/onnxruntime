@@ -1259,7 +1259,7 @@ if (NOT onnxruntime_ENABLE_TRAINING_TORCH_INTEROP)
 endif()
 if (NOT onnxruntime_MINIMAL_BUILD)
   onnxruntime_add_executable(layout_transformer ${REPO_ROOT}/onnxruntime/tool/layout_transformer.cc ${REPO_ROOT}/onnxruntime/core/providers/cpu/tensor/transpose.cc)
-  target_link_libraries(layout_transformer PRIVATE onnxruntime_optimizer onnxruntime_util onnxruntime_framework onnxruntime_graph onnxruntime_mlas onnxruntime_common onnxruntime_flatbuffers ${onnxruntime_EXTERNAL_LIBRARIES})
+  target_link_libraries(layout_transformer PRIVATE onnxruntime_optimizer onnxruntime_util onnxruntime_framework onnxruntime_graph ${ONNXRUNTIME_XNNPACK_SCHEMAS_LIBRARY} onnxruntime_mlas onnxruntime_common onnxruntime_flatbuffers ${onnxruntime_EXTERNAL_LIBRARIES})
 endif()
 # limit to only test on windows first, due to a runtime path issue on linux
 if (NOT onnxruntime_MINIMAL_BUILD AND NOT onnxruntime_EXTENDED_MINIMAL_BUILD

@@ -154,6 +154,8 @@ class NodeRef {
   /// The attribute value, or nullopt if the attribute is not present on the node, or is not of type int.
   /// </returns>
   virtual std::optional<int64_t> GetAttributeInt(std::string_view name) const = 0;
+  virtual std::optional<float> GetAttributeFloat(std::string_view name) const = 0;
+
 
   /// <param name="name">Name of the attribute to return</param>
   /// <returns>
@@ -167,6 +169,8 @@ class NodeRef {
   /// <param name="name">Name of the attribute to set</param>
   /// <param name="value">New value of attribute</param>
   virtual void SetAttributeInt(std::string_view name, int64_t value) = 0;
+
+  virtual void SetAttributeFloat(std::string_view name, float value) = 0;
 
   /// <summary>
   /// Sets an int[] attribute with name and value. Overwrites existing value if present.

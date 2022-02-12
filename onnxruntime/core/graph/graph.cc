@@ -1479,9 +1479,19 @@ void Graph::AddEdge(NodeIndex src_node_index, NodeIndex dst_node_index, int src_
   }
 
   if (src_arg != dst_arg) {
+    if (!src_arg->Type() && dst_arg->Type()) {
+      ORT_THROW("Argument type mismatch when adding edge. src node misses type info");
+    }
+    if (!dst_arg->Type() && src_arg->Type()) {
+      ORT_THROW("Argument type mismatch when adding edge. dst node misses type info");
+    }
     if (src_arg->Type() != dst_arg->Type()) {
       // The output type of source node arg does not match the input type of destination node arg.
-      ORT_THROW("Argument type mismatch when adding edge.");
+      std::ostringstream oss;
+      oss << "Argument type mismatch when adding edge.";
+      if (src_arg->Type()) oss << " src type : " << src_arg->Type() << ".";
+      if (dst_arg->Type()) oss << " dst type : " << *dst_arg->Type() << ".";
+      ORT_THROW(oss.str());
     }
     *dst_arg_pointer = src_arg;
   }
@@ -2176,9 +2186,14 @@ Status Graph::InferAndVerifySubgraphTypes(const Node& node, Graph& subgraph,
 
 Status Graph::UpdateShapeInference(Node& node) {
   // We only use this during constant folding, and we don't constant fold control flow nodes.
-  ORT_ENFORCE(node.GetAttributeNameToMutableSubgraphMap().empty(),
+  if(!node.GetAttributeNameToMutableSubgraphMap().empty())
+      return Status(ONNXRUNTIME, FAIL,
               "UpdateTypeShapeInference is not intended to be used with control flow nodes containing subgraphs");
-
+  if (!node.Op()) {
+    if (!SetOpSchemaFromRegistryForNode(node) || !node.Op()) {
+      return Status(ONNXRUNTIME, FAIL, "Can not run shape inference when schema is missing");
+    }
+  }    
   // Whilst the type inferencing will run again we don't allow type overrides due to using the default
   // ResolveOptions settings, so essentially this can only change the shape information.
   return InferAndVerifyTypeMatch(node, *node.Op(), {});

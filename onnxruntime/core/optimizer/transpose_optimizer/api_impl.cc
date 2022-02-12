@@ -80,8 +80,10 @@ class ApiNode final : public api::NodeRef {
   std::vector<std::string_view> Inputs() const override;
   std::vector<std::string_view> Outputs() const override;
   std::optional<int64_t> GetAttributeInt(std::string_view name) const override;
+  std::optional<float> GetAttributeFloat(std::string_view name) const override;
   std::optional<std::vector<int64_t>> GetAttributeInts(std::string_view name) const override;
   void SetAttributeInt(std::string_view name, int64_t value) override;
+  void SetAttributeFloat(std::string_view name, float value) override;
   void SetAttributeInts(std::string_view name, const std::vector<int64_t>& value) override;
   void CopyAttributes(const api::NodeRef& node) override;
   void ClearAttribute(std::string_view name) override;
@@ -287,6 +289,15 @@ std::vector<std::string_view> ApiNode::Outputs() const {
   return NodeArgsToStrings(node_.OutputDefs());
 }
 
+std::optional<float> ApiNode::GetAttributeFloat(std::string_view name) const {
+  const onnx::AttributeProto* attr = graph_utils::GetNodeAttribute(node_, std::string(name));
+  if (attr == nullptr || attr->type() != onnx::AttributeProto_AttributeType_FLOAT) {
+    return std::nullopt;
+  }
+
+  return attr->f();
+}
+
 std::optional<int64_t> ApiNode::GetAttributeInt(std::string_view name) const {
   const onnx::AttributeProto* attr = graph_utils::GetNodeAttribute(node_, std::string(name));
   if (attr == nullptr || attr->type() != onnx::AttributeProto_AttributeType_INT) {
@@ -313,6 +324,10 @@ std::optional<std::vector<int64_t>> ApiNode::GetAttributeInts(std::string_view n
 }
 
 void ApiNode::SetAttributeInt(std::string_view name, int64_t value) {
+  node_.AddAttribute(std::string(name), value);
+}
+
+void ApiNode::SetAttributeFloat(std::string_view name, float value) {
   node_.AddAttribute(std::string(name), value);
 }
 
