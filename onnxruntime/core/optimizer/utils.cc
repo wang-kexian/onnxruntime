@@ -292,6 +292,9 @@ bool GetClipConstantMinMax(const Graph& graph, const Node& node, float& min, flo
 
   // Clip opset 1 and 6 has min and max as attributes. they're inputs from opset 11 on.
   bool min_max_are_attributes = graph_utils::IsSupportedOptypeVersionAndDomain(node, "Clip", {1, 6});
+  if (!min_max_are_attributes && !graph_utils::IsSupportedOptypeVersionAndDomain(node, "Clip", {11, 12, 13})) {
+    return false;
+  }
   bool min_max_are_constant_values = true;
 
   if (min_max_are_attributes) {
