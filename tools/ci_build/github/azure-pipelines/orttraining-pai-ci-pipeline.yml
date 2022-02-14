@@ -65,10 +65,10 @@ jobs:
       echo "##vso[task.setvariable variable=onnxruntimeBuildSucceeded]true"
     displayName: 'Set Onnxruntime Build Succeeded'
 
-  - script: |-
-      cd ./build/RelWithDebInfo &&\
-      ../../tools/ci_build/github/pai/pai_test_launcher.sh
-    displayName: 'Run onnxruntime unit tests'
+  # - script: |-
+  #     cd ./build/RelWithDebInfo &&\
+  #     ../../tools/ci_build/github/pai/pai_test_launcher.sh
+  #   displayName: 'Run onnxruntime unit tests'
 
   - script: |-
       cd ./build/RelWithDebInfo
@@ -77,56 +77,56 @@ jobs:
     displayName: 'Compile torch extensions into build directory'
     condition: and(succeededOrFailed(), eq(variables.onnxruntimeBuildSucceeded, 'true')) # ensure all tests are run when the build successed
   
-  - script: |-
-      cd ./build/RelWithDebInfo
-      export PYTHONPATH=$PWD
-      export ORTMODULE_ONNX_OPSET_VERSION=12
-      python \
-        /stage/huggingface-transformers/examples/pytorch/language-modeling/run_mlm.py \
-        --model_name_or_path bert-large-uncased \
-        --dataset_name wikitext \
-        --dataset_config_name wikitext-2-raw-v1 \
-        --do_train \
-        --max_steps 260 \
-        --logging_steps 20 \
-        --output_dir ./test-mlm-bbu \
-        --overwrite_output_dir \
-        --per_device_train_batch_size 8 \
-        --fp16 \
-        --dataloader_num_workers 1 \
-        --ort \
-        --skip_memory_metrics
-      python ../../orttraining/tools/ci_test/compare_huggingface.py \
-        ci-pipeline-actual.json \
-        ../../orttraining/tools/ci_test/results/ci-mi100.huggingface.bert-large-rocm4.3.1.json
-    displayName: 'Run Python Hugging-Face BERT-L test'
-    condition: and(succeededOrFailed(), eq(variables.onnxruntimeBuildSucceeded, 'true')) # ensure all tests are run when the build successed
+  # - script: |-
+  #     cd ./build/RelWithDebInfo
+  #     export PYTHONPATH=$PWD
+  #     export ORTMODULE_ONNX_OPSET_VERSION=12
+  #     python \
+  #       /stage/huggingface-transformers/examples/pytorch/language-modeling/run_mlm.py \
+  #       --model_name_or_path bert-large-uncased \
+  #       --dataset_name wikitext \
+  #       --dataset_config_name wikitext-2-raw-v1 \
+  #       --do_train \
+  #       --max_steps 260 \
+  #       --logging_steps 20 \
+  #       --output_dir ./test-mlm-bbu \
+  #       --overwrite_output_dir \
+  #       --per_device_train_batch_size 8 \
+  #       --fp16 \
+  #       --dataloader_num_workers 1 \
+  #       --ort \
+  #       --skip_memory_metrics
+  #     python ../../orttraining/tools/ci_test/compare_huggingface.py \
+  #       ci-pipeline-actual.json \
+  #       ../../orttraining/tools/ci_test/results/ci-mi100.huggingface.bert-large-rocm4.3.1.json
+  #   displayName: 'Run Python Hugging-Face BERT-L test'
+  #   condition: and(succeededOrFailed(), eq(variables.onnxruntimeBuildSucceeded, 'true')) # ensure all tests are run when the build successed
   
-  - script: |-
-      cd ./build/RelWithDebInfo
-      export PYTHONPATH=$PWD
-      export ORTMODULE_ONNX_OPSET_VERSION=12
-      python \
-        /stage/huggingface-transformers/examples/pytorch/language-modeling/run_clm.py \
-        --model_name_or_path gpt2 \
-        --dataset_name wikitext \
-        --dataset_config_name wikitext-2-raw-v1 \
-        --do_train \
-        --label_smoothing 0.1 \
-        --max_steps 260 \
-        --logging_steps 20 \
-        --overwrite_output_dir \
-        --output_dir ./test-clm \
-        --per_device_train_batch_size 8 \
-        --fp16 \
-        --dataloader_num_workers 1 \
-        --ort \
-        --skip_memory_metrics
-      python ../../orttraining/tools/ci_test/compare_huggingface.py \
-        ci-pipeline-actual.json \
-        ../../orttraining/tools/ci_test/results/ci-mi100.huggingface.gpt2-rocm4.3.1.json
-    displayName: 'Run Python Hugging-Face GPT2 test'
-    condition: and(succeededOrFailed(), eq(variables.onnxruntimeBuildSucceeded, 'true')) # ensure all tests are run when the build successed
+  # - script: |-
+  #     cd ./build/RelWithDebInfo
+  #     export PYTHONPATH=$PWD
+  #     export ORTMODULE_ONNX_OPSET_VERSION=12
+  #     python \
+  #       /stage/huggingface-transformers/examples/pytorch/language-modeling/run_clm.py \
+  #       --model_name_or_path gpt2 \
+  #       --dataset_name wikitext \
+  #       --dataset_config_name wikitext-2-raw-v1 \
+  #       --do_train \
+  #       --label_smoothing 0.1 \
+  #       --max_steps 260 \
+  #       --logging_steps 20 \
+  #       --overwrite_output_dir \
+  #       --output_dir ./test-clm \
+  #       --per_device_train_batch_size 8 \
+  #       --fp16 \
+  #       --dataloader_num_workers 1 \
+  #       --ort \
+  #       --skip_memory_metrics
+  #     python ../../orttraining/tools/ci_test/compare_huggingface.py \
+  #       ci-pipeline-actual.json \
+  #       ../../orttraining/tools/ci_test/results/ci-mi100.huggingface.gpt2-rocm4.3.1.json
+  #   displayName: 'Run Python Hugging-Face GPT2 test'
+  #   condition: and(succeededOrFailed(), eq(variables.onnxruntimeBuildSucceeded, 'true')) # ensure all tests are run when the build successed
   
 #  - script: |-
 #      cd ./build/RelWithDebInfo
@@ -183,30 +183,30 @@ jobs:
   #  displayName: 'Run Python Hugging-Face RoBERTa-L test'
   #  condition: succeededOrFailed() # ensure all tests are run
   
-  - script: |-
-      cd ./build/RelWithDebInfo
-      export PYTHONPATH=$PWD
-      export ORTMODULE_ONNX_OPSET_VERSION=12
-      python \
-        /stage/huggingface-transformers/examples/pytorch/language-modeling/run_mlm.py \
-        --model_name_or_path distilbert-base-uncased \
-        --dataset_name wikitext \
-        --dataset_config_name wikitext-2-raw-v1 \
-        --do_train \
-        --max_steps 260 \
-        --logging_steps 20 \
-        --output_dir ./test-mlm-bbu \
-        --overwrite_output_dir \
-        --per_device_train_batch_size 32 \
-        --fp16 \
-        --dataloader_num_workers 1 \
-        --ort \
-        --skip_memory_metrics
-      python ../../orttraining/tools/ci_test/compare_huggingface.py \
-        ci-pipeline-actual.json \
-        ../../orttraining/tools/ci_test/results/ci-mi100.huggingface.distilbert-base-rocm4.3.1.json
-    displayName: 'Run Python Hugging-Face DistilBERT test'
-    condition: and(succeededOrFailed(), eq(variables.onnxruntimeBuildSucceeded, 'true')) # ensure all tests are run when the build successed
+  # - script: |-
+  #     cd ./build/RelWithDebInfo
+  #     export PYTHONPATH=$PWD
+  #     export ORTMODULE_ONNX_OPSET_VERSION=12
+  #     python \
+  #       /stage/huggingface-transformers/examples/pytorch/language-modeling/run_mlm.py \
+  #       --model_name_or_path distilbert-base-uncased \
+  #       --dataset_name wikitext \
+  #       --dataset_config_name wikitext-2-raw-v1 \
+  #       --do_train \
+  #       --max_steps 260 \
+  #       --logging_steps 20 \
+  #       --output_dir ./test-mlm-bbu \
+  #       --overwrite_output_dir \
+  #       --per_device_train_batch_size 32 \
+  #       --fp16 \
+  #       --dataloader_num_workers 1 \
+  #       --ort \
+  #       --skip_memory_metrics
+  #     python ../../orttraining/tools/ci_test/compare_huggingface.py \
+  #       ci-pipeline-actual.json \
+  #       ../../orttraining/tools/ci_test/results/ci-mi100.huggingface.distilbert-base-rocm4.3.1.json
+  #   displayName: 'Run Python Hugging-Face DistilBERT test'
+  #   condition: and(succeededOrFailed(), eq(variables.onnxruntimeBuildSucceeded, 'true')) # ensure all tests are run when the build successed
   
   #- script: |-
   #    cd ./build/RelWithDebInfo
