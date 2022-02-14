@@ -16,6 +16,10 @@ set(XNNPACK_ONNX_ONNX_URL https://github.com/onnx/onnx.git)
 set(XNNPACK_ONNX_ONNX_VERSION v1.10.2)
 
 if(onnxruntime_USE_KLEE)
+  # Disable C++ exceptions.
+  string(REGEX REPLACE "-fexceptions" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions")
+  add_definitions(-DONNX_NO_EXCEPTIONS=1)
   add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-stdlib=libc++>")
    #-g -O1 -Xclang -disable-llvm-passes -D__NO_STRING_INLINES  -D_FORTIFY_SOURCE=0 -U__OPTIMIZE__ -I /opt/klee/klee_build120stp_z3/include -emit-llvm>")
   add_compile_options(-g -O1 -Xclang -disable-llvm-passes -D__NO_STRING_INLINES  -D_FORTIFY_SOURCE=0 -U__OPTIMIZE__ -I /opt/klee/klee_build120stp_z3/include -emit-llvm)
@@ -52,5 +56,6 @@ add_dependencies(xnnpack_onnx_schema onnx_proto)
 
 if(onnxruntime_USE_KLEE)
   add_executable(test1 tests/main.cc)
-  target_link_libraries(test1 onnx onnx_proto protobuf::libprotobuf)
+  target_link_libraries(test1 xnnpack_onnx_schema onnx onnx_proto protobuf::libprotobuf)
+  target_include_directories(test1 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 endif()

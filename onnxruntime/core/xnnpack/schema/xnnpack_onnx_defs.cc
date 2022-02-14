@@ -3,8 +3,6 @@
 
 #include "xnnpack_onnx_defs.h"
 #include <onnx/defs/schema.h>
-#include <onnx/common/common.h>
-#include <onnx/common/status.h>
 
 using namespace onnx;
 
@@ -13,7 +11,6 @@ namespace xnnpack {
 
 using ::ONNX_NAMESPACE::Common::StatusCategory;
 using ::ONNX_NAMESPACE::Common::StatusCode;
-using OnnxStatus = ::ONNX_NAMESPACE::Common::Status;
 
 static OnnxStatus ComputeOutputSizeSame(ptrdiff_t input_size, int stride, ptrdiff_t* output_size) {
   if (stride == 0) {
@@ -71,12 +68,12 @@ static OnnxStatus ConvShapeInference(ptrdiff_t batch_shape, ptrdiff_t in_height,
   return ::ONNX_NAMESPACE::Common::Status::OK();
 }
 
-static OnnxStatus XnnPackConvShapeInferImpl(::ONNX_NAMESPACE::TensorShapeProto& input_shape,
-                                            ::ONNX_NAMESPACE::TensorShapeProto& weight_shape,
-                                            uint32_t input_padding_top, uint32_t input_padding_right,
-                                            uint32_t input_padding_bottom, uint32_t input_padding_left,
-                                            uint32_t subsampling_height, uint32_t subsampling_width, int padding_mode,
-                                            ::ONNX_NAMESPACE::TensorShapeProto* final_output_shape) {
+OnnxStatus XnnPackConvShapeInferImpl(::ONNX_NAMESPACE::TensorShapeProto& input_shape,
+                                     ::ONNX_NAMESPACE::TensorShapeProto& weight_shape,
+                                     uint32_t input_padding_top, uint32_t input_padding_right,
+                                     uint32_t input_padding_bottom, uint32_t input_padding_left,
+                                     uint32_t subsampling_height, uint32_t subsampling_width, int padding_mode,
+                                     ::ONNX_NAMESPACE::TensorShapeProto* final_output_shape) {
   if (input_shape.dim_size() != 4) {
     return OnnxStatus(StatusCategory::NONE, StatusCode::FAIL, "Input tensor must have 4 dimensions");
   }
@@ -106,13 +103,13 @@ static OnnxStatus XnnPackConvShapeInferImpl(::ONNX_NAMESPACE::TensorShapeProto& 
   return OnnxStatus::OK();
 }
 
-static OnnxStatus XnnPackDepthwiseConvolution2dShapeInferImpl(::ONNX_NAMESPACE::TensorShapeProto& input_shape,
-                                                              ::ONNX_NAMESPACE::TensorShapeProto& weight_shape,
-                                                              uint32_t input_padding_top, uint32_t input_padding_right,
-                                                              uint32_t input_padding_bottom,
-                                                              uint32_t input_padding_left, uint32_t subsampling_height,
-                                                              uint32_t subsampling_width, int padding_mode,
-                                                              ::ONNX_NAMESPACE::TensorShapeProto* final_output_shape) {
+OnnxStatus XnnPackDepthwiseConvolution2dShapeInferImpl(::ONNX_NAMESPACE::TensorShapeProto& input_shape,
+                                                       ::ONNX_NAMESPACE::TensorShapeProto& weight_shape,
+                                                       uint32_t input_padding_top, uint32_t input_padding_right,
+                                                       uint32_t input_padding_bottom,
+                                                       uint32_t input_padding_left, uint32_t subsampling_height,
+                                                       uint32_t subsampling_width, int padding_mode,
+                                                       ::ONNX_NAMESPACE::TensorShapeProto* final_output_shape) {
   if (input_shape.dim_size() != 4) {
     return OnnxStatus(StatusCategory::NONE, StatusCode::FAIL, "Input tensor must have 4 dimensions");
   }
@@ -121,10 +118,15 @@ static OnnxStatus XnnPackDepthwiseConvolution2dShapeInferImpl(::ONNX_NAMESPACE::
     return OnnxStatus(StatusCategory::NONE, StatusCode::FAIL, "Weight tensor must have 4 dimensions");
   }
 
+
   int64_t input_N = input_shape.dim(0).dim_value();
   int64_t input_H = input_shape.dim(1).dim_value();
   int64_t input_W = input_shape.dim(2).dim_value();
   int64_t input_C = input_shape.dim(3).dim_value();
+
+  if (input_C == 0) {
+    return OnnxStatus(StatusCategory::NONE, StatusCode::FAIL, "Input channel can not be zero");
+  }
 
   // Weight shape: [1, kernel_height, kernel_width, input_channels * depth_multiplier]
   int64_t size_one = weight_shape.dim(0).dim_value();
