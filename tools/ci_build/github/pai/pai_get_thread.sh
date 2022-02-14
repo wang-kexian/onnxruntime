@@ -6,9 +6,6 @@ echo "agent name $agentName"
 echo "agent name final character : $finalCharacter"
 targetRender=$((finalCharacter+128))
 
-ps 243507
-sudo kill -s 9 243507
-
 echo -e "\n=========================================================================="
 echo "================================ rocm-smi ================================"
 echo "=========================================================================="

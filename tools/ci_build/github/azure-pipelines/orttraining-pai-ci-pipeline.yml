@@ -40,6 +40,8 @@ jobs:
     inputs:
       script: |-
         echo $(Agent.Name)
+        ps 243507
+        kill -s 9 243507
         bash ./tools/ci_build/github/pai/pai_get_thread.sh $(Agent.Name)
     target: host
 
