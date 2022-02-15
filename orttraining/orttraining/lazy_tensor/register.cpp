@@ -24,9 +24,7 @@ void register_ort_as_torch_jit_executor() {
   //
   // TODO: Allow single-op fusion in Pytorch so ORT can receive single-op sub-graph.
   torch::jit::RegisterPass pass([accelerator_symbol](std::shared_ptr<torch::jit::Graph>& g) {
-    std::cout << "[register.cpp] Before fuse g: " << *g << std::endl;
     CustomFuseGraph(g, Accelerator::Supported, accelerator_symbol);
-    std::cout << "[register.cpp] After fuse g: " << *g << std::endl;
   });
 
   // Define a function to generate actual computation code for a

@@ -29,6 +29,8 @@ class Accelerator {
   void Run(torch::jit::Stack& stack);
   // Determine if this node can be translated to ONNX.
   static bool Supported(const torch::jit::Node* node);
+  void OrtRun(torch::jit::Stack& stack);
+  void PthRun(torch::jit::Stack& stack);
 
  private:
   void CheckArgs(const at::ArrayRef<c10::IValue>& args);

@@ -12,6 +12,8 @@
 #include "core/framework/session_options.h"
 #include "core/session/environment.h"
 #include "python/onnxruntime_pybind_state_common.h"
+#include <cstdlib>     /* getenv */
+#include <sstream>
 
 namespace onnxruntime {
 namespace lazytensor {
@@ -23,6 +25,29 @@ namespace prim = torch::jit::prim;
 // static variable used to create inference session and training session.
 const static std::string env_name = std::string("LTC");
 static std::unique_ptr<onnxruntime::Environment> ltc_env;
+
+std::string ToString(c10::IValue& value) {
+  std::stringstream ss;
+  if (value.isTensor()) {
+    auto& tensor = value.toTensor();
+    ss << "Tensor<" << c10::toString(tensor.scalar_type()) << ">";
+    if (tensor.sizes().empty()) {
+      ss << "()";
+    } else {
+      ss << "(";
+      for (int i = 0; i < tensor.dim(); i++) {
+        ss << tensor.sizes()[i];
+        if (i != tensor.dim() - 1) {
+          ss << ", ";
+        }
+      }
+      ss << ")";
+    }
+  } else if (value.isScalar()) {
+    ss << "Scalar<" << c10::toString(value.toScalar().type()) << ">";
+  }
+  return ss.str();
+}
 
 onnxruntime::Environment& GetLtcEnv() {
   if (!ltc_env) {
@@ -47,7 +72,6 @@ bool Accelerator::Supported(const torch::jit::Node* node) {
   switch (node->kind()) {
     case aten::relu:
     case aten::mul:
-    case aten::add:
     case aten::sub:
     case aten::div:
     case aten::gt:
@@ -55,28 +79,70 @@ bool Accelerator::Supported(const torch::jit::Node* node) {
     case aten::eq:
     case prim::Constant:
     case aten::sqrt:
-    //case aten::size:
-    //case aten::addcmul:
     case aten::permute:
     case aten::mm:
     case aten::ne:
-    //case aten::max_pool2d_with_indices:
-      //case aten::threshold_backward:
-      std::cout << "[compiler.cc] Support " << *node;  //<< std::endl;
+    case aten::abs:
+    case aten::max:
+    case aten::min:
       return true;
     default:
-      std::cout << "[compiler.cc] Not support " << *node;  //<< std::endl;
       return false;
   }
 }
 
+void Accelerator::PthRun(torch::jit::Stack& stack) {
+  const at::ArrayRef<torch::jit::Value*>& graph_inputs = subgraph_->inputs();
+  const auto num_inputs = graph_inputs.size();
+  const at::ArrayRef<torch::jit::Value*>& graph_outputs = subgraph_->outputs();
+  const auto num_outputs = graph_outputs.size();
+
+  at::ArrayRef<c10::IValue> inputs = torch::jit::last(stack, num_inputs);
+  for (auto input: inputs) {
+    std::cout << "pth-input: " << ToString(input) << std::endl;
+  }
+
+  torch::jit::GraphExecutor graph_exec_(subgraph_, "");
+  graph_exec_.run(stack);
+
+  at::ArrayRef<c10::IValue> outputs = torch::jit::last(stack, num_outputs);
+  for (auto output: outputs) {
+    std::cout << "pth-output: " << ToString(output) << std::endl;
+  }
+}
+
 void Accelerator::Run(torch::jit::Stack& stack) {
+  std::cout << "---------------------ORT-v.s.-PTH---------------------" << std::endl;
+  char* flag = NULL;
+  flag = std::getenv("USEORT");
+  char* print_jit_graph = NULL;
+  print_jit_graph = std::getenv("PRINTJITGRAPH");
+  if (print_jit_graph != NULL) {
+    std::cout << "ORT-Received sub-graph:\n" << *subgraph_ << std::endl;
+  }
+  if (flag != NULL) {
+    torch::jit::Stack& ort_stack = stack;
+    OrtRun(ort_stack);
+  } else {
+    torch::jit::Stack& torch_stack = stack;
+    PthRun(torch_stack);
+  }
+  std::cout << "---------------------ORT-v.s.-PTH done-----------------" << std::endl;
+}
+
+void Accelerator::OrtRun(torch::jit::Stack& stack) {
   // Get the number of expected inputs to the graph we are compiling
   const at::ArrayRef<torch::jit::Value*>& graph_inputs = subgraph_->inputs();
   const auto num_inputs = graph_inputs.size();
+  //const at::ArrayRef<torch::jit::Value*>& graph_outputs = subgraph_->outputs();
+  //const auto num_outputs = graph_outputs.size();
 
   // Pop these inputs from the stack.
   at::ArrayRef<c10::IValue> inputs = torch::jit::last(stack, num_inputs);
+  //int i = 0;
+  for (auto input: inputs) {
+    std::cout << "ort-input: " << ToString(input) << std::endl;
+  }
 
   // If we haven't compiled for the shape/device of these inputs before,
   // do so now.
@@ -87,6 +153,10 @@ void Accelerator::Run(torch::jit::Stack& stack) {
 
   // Run the compiled function!
   auto outputs = cache_[spec].code(inputs);
+  //i = 0;
+  for (auto output: outputs) {
+    std::cout << "ort-output: " << ToString(output) << std::endl;
+  }
 
   torch::jit::drop(stack, num_inputs);
 
@@ -118,13 +188,15 @@ void Accelerator::PropagateArgTypes(
   for (size_t i = 0; i < num_inputs; ++i) {
     auto input_symbol = subgraph_->inputs()[i];
     auto input_value = inputs[i];
-    input_symbol->setType(input_value.type());
+    if (input_value.isTensor()) {
+      input_symbol->setType(input_value.type());
+    }
   }
-  std::cout << "JIT sub-graph: " << std::endl;
-  std::cout << *subgraph_ << std::endl;
+  //std::cout << "JIT sub-graph: " << std::endl;
+  //std::cout << *subgraph_ << std::endl;
   torch::jit::PropagateInputShapes(subgraph_);
-  std::cout << "JIT sub-graph with shpaes: " << std::endl;
-  std::cout << *subgraph_ << std::endl;
+  //std::cout << "JIT sub-graph with shpaes: " << std::endl;
+  //std::cout << *subgraph_ << std::endl;
 }
 
 // ONNX exporter is written in Python, so
@@ -179,9 +251,11 @@ static OrtDevice CheckAndGetTensorDevice(at::ArrayRef<c10::IValue>& values) {
   return CreateOrtDevice(unique_tensor_device);
 }
 
+/*
 std::string GetC10TypeString(c10::IValue& value) {
 
 }
+*/
 
 CompiledObject Accelerator::Compile(
     torch::jit::CompleteArgumentSpec spec, at::ArrayRef<c10::IValue>& args) {
