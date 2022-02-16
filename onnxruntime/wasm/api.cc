@@ -12,6 +12,49 @@ namespace {
 OrtEnv* g_env;
 }  // namespace
 
+
+// Shlava - Added
+#include <unistd.h>
+#include <emscripten.h>
+
+struct s_mallinfo {
+	int arena;    /* non-mmapped space allocated from system */
+	int ordblks;  /* number of free chunks */
+	int smblks;   /* always 0 */
+	int hblks;    /* always 0 */
+	int hblkhd;   /* space in mmapped regions */
+	int usmblks;  /* maximum total allocated space */
+	int fsmblks;  /* always 0 */
+	int uordblks; /* total allocated space */
+	int fordblks; /* total free space */
+	int keepcost; /* releasable (via malloc_trim) space */
+};
+
+extern "C" {
+	extern s_mallinfo mallinfo();
+}
+
+
+unsigned int getTotalMemory() {
+	return EM_ASM_INT({return HEAP8.length;},1);
+  //double sum = EM_ASM_DOUBLE({return $0 + $1;}, 10.5, 20.1);
+  //printf("EM_ASM_DOUBLE result: %.2f\n", sum);
+}
+
+unsigned int getFreeMemory() {
+	s_mallinfo i = mallinfo();
+	unsigned int totalMemory = getTotalMemory();
+	unsigned int dynamicTop = (unsigned int)sbrk(0);
+	return totalMemory - dynamicTop + i.fordblks;
+}
+
+void checkMemory(const char* msg) {
+    auto total = getTotalMemory();
+    auto free = getFreeMemory();
+    printf("+++ MEM [%s]: free=%u, total=%u\n", msg, free, total);
+}
+// Shalva - End
+
 OrtErrorCode CheckStatus(OrtStatusPtr status) {
   OrtErrorCode error_code = ORT_OK;
   if (status) {
@@ -76,7 +119,7 @@ OrtSessionOptions* OrtCreateSessionOptions(size_t graph_optimization_level,
   RETURN_NULLPTR_IF_ERROR(SetSessionGraphOptimizationLevel,
                           session_options,
                           static_cast<GraphOptimizationLevel>(graph_optimization_level));
-
+  //printf("shalva1\n");
   if (enable_cpu_mem_arena) {
     RETURN_NULLPTR_IF_ERROR(EnableCpuMemArena, session_options);
   } else {
@@ -127,6 +170,7 @@ void OrtReleaseSessionOptions(OrtSessionOptions* session_options) {
 }
 
 OrtSession* OrtCreateSession(void* data, size_t data_length, OrtSessionOptions* session_options) {
+  checkMemory("OrtCreateSession - Start");
   // OrtSessionOptions must not be nullptr.
   if (session_options == nullptr) {
     return nullptr;
@@ -144,6 +188,7 @@ OrtSession* OrtCreateSession(void* data, size_t data_length, OrtSessionOptions* 
   return (CHECK_STATUS(CreateSessionFromArray, g_env, data, data_length, session_options, &session) == ORT_OK)
              ? session
              : nullptr;
+  checkMemory("OrtCreateSession - End");
 }
 
 void OrtReleaseSession(OrtSession* session) {
@@ -237,7 +282,7 @@ int OrtGetTensorData(OrtValue* tensor, int* data_type, void** data, size_t** dim
       return error_code;                                          \
     }                                                             \
   } while (false)
-
+  checkMemory("OrtGetTensorData - Start");
   OrtTensorTypeAndShapeInfo* info = nullptr;
   OrtAllocator* allocator = nullptr;
   size_t* p_dims = nullptr;
@@ -302,6 +347,7 @@ int OrtGetTensorData(OrtValue* tensor, int* data_type, void** data, size_t** dim
   }
 
   Ort::GetApi().ReleaseTensorTypeAndShapeInfo(info);
+  checkMemory("OrtGetTensorData - End");
   return ORT_OK;
 }
 
@@ -313,6 +359,7 @@ OrtRunOptions* OrtCreateRunOptions(size_t log_severity_level,
                                    size_t log_verbosity_level,
                                    bool terminate,
                                    const char* tag) {
+  checkMemory("OrtCreateRunOptions - Start");
   OrtRunOptions* run_options = nullptr;
   RETURN_NULLPTR_IF_ERROR(CreateRunOptions, &run_options);
 
@@ -330,7 +377,7 @@ OrtRunOptions* OrtCreateRunOptions(size_t log_severity_level,
   if (tag != nullptr) {
     RETURN_NULLPTR_IF_ERROR(RunOptionsSetRunTag, run_options, tag);
   }
-
+  checkMemory("OrtCreateRunOptions - End");
   return run_options;
 }
 
@@ -348,6 +395,7 @@ int OrtRun(OrtSession* session,
            const char** input_names, const ort_tensor_handle_t* inputs, size_t input_count,
            const char** output_names, size_t output_count, ort_tensor_handle_t* outputs,
            OrtRunOptions* run_options) {
+  checkMemory("OrtRun - Start");
   return CHECK_STATUS(Run, session, run_options, input_names, inputs, input_count, output_names, output_count, outputs);
 }
 

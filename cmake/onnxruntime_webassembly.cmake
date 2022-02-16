@@ -166,9 +166,9 @@ else()
     onnxruntime_util
     re2::re2
   )
-
-  set(EXPORTED_RUNTIME_METHODS "['stackAlloc','stackRestore','stackSave','UTF8ToString','stringToUTF8','lengthBytesUTF8']")
-
+  #shalva - added emscripten_asm_const_int
+  set(EXPORTED_RUNTIME_METHODS "['stackAlloc','stackRestore','stackSave','UTF8ToString','stringToUTF8','lengthBytesUTF8','emscripten_asm_const_int']")
+  #shalva - added assertion to the compilation
   set_target_properties(onnxruntime_webassembly PROPERTIES LINK_FLAGS "             \
                         -s \"EXPORTED_RUNTIME_METHODS=${EXPORTED_RUNTIME_METHODS}\" \
                         -s WASM=1                                                   \
@@ -180,6 +180,7 @@ else()
                         -s VERBOSE=0                                                \
                         -s NO_FILESYSTEM=1                                          \
                         -s MALLOC=${onnxruntime_WEBASSEMBLY_MALLOC}                 \
+                        -s ASSERTIONS=1                                             \ 
                         --closure 1                                                 \
                         --no-entry")
 
