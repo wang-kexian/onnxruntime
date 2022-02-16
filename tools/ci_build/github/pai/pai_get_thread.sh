@@ -12,10 +12,10 @@ rocm-smi
 echo -e "\n ---- rocm-smi --showpids"
 rocm-smi --showpids
 
-echo -e"\n ---- rocm-smi --showpidgpus"
+echo -e "\n ---- rocm-smi --showpidgpus"
 rocm-smi --showpidgpus 
 
-echo -e"\n ---- rocm-smi --showpids detail"
+echo -e "\n ---- rocm-smi --showpids detail"
 rocm-smi --showpids | awk '$1 ~/[0-9]+/{if((NR>6)) {print $1}}'
 
 echo -e "\n ---- show all renders"
