@@ -863,39 +863,6 @@ Global attention flags have value 1 for the tokens attend globally and 0 otherwi
       .TypeConstraint("G", {"tensor(int32)"}, "Constrain to integer types")
       .TypeAndShapeInferenceFunction(ONNX_NAMESPACE::propagateShapeAndTypeFromFirstInput);
 
-  static const char* Longformer_Attention_QuantizedS8_doc = R"DOC(
-Quantized version of Longformer Self Attention (using int8 and specific Layout).
-Longformer Self Attention with a local context and a global context. Tokens attend locally: Each token
-attends to its W previous tokens and W succeding tokens with W being the window length. A selected few tokens
-attend globally to all other tokens.
-
-The attention mask is of shape (batch_size, sequence_length), where sequence_length is a multiple of 2W after padding.
-Mask value < 0 (like -10000.0) means the token is masked, 0 otherwise.
-
-Global attention flags have value 1 for the tokens attend globally and 0 otherwise.
-)DOC";
-
-  ONNX_CONTRIB_OPERATOR_SCHEMA(QLinearLongformerAttention)
-      .SetDomain(kMSDomain)
-      .SinceVersion(1)
-      .SetDoc(Longformer_Attention_QuantizedS8_doc)
-      .Attr("num_heads", "Number of attention heads", AttributeProto::INT)
-      .Attr("window", "One sided attention windows length W, or half of total window length", AttributeProto::INT)
-      .Attr("GemmWeightLayout", AttributeProto::INT)
-      .Attr("GemmInputLayout", AttributeProto::INT)
-      .Input(0, "input", "3D input tensor with shape (batch_size, sequence_length, hidden_size), hidden_size = num_heads * head_size", "T")
-      .Input(1, "weight", "2D input tensor with shape (hidden_size, 3 * hidden_size)", "T")
-      .Input(2, "bias", "1D input tensor with shape (3 * hidden_size)", "T")
-      .Input(3, "mask", "Attention mask with shape (batch_size, sequence_length)", "T")
-      .Input(4, "global_weight", "2D input tensor with shape (hidden_size, 3 * hidden_size)", "T")
-      .Input(5, "global_bias", "1D input tensor with shape (3 * hidden_size)", "T")
-      .Input(6, "global", "Global attention flags with shape (batch_size, sequence_length)", "G")
-      .Output(0, "output", "3D output tensor with shape (batch_size, sequence_length, hidden_size)", "T")
-      .TypeConstraint("T", {"tensor(int8)"}, "Constrain input and output types to int8 tensors.")
-      .TypeConstraint("G", {"tensor(int32)"}, "Constrain to integer types")
-      .TypeAndShapeInferenceFunction(ONNX_NAMESPACE::propagateShapeAndTypeFromFirstInput);
-
-
   static const char* Decoder_Attention_doc = R"DOC(
 This DecoderAttention supports self attention and cross attention, key and value cache, and key_padding_mask. The attention mask is not support at the moment.
 Some boolean parameters are passed by runtime input for generic purpose
@@ -3321,6 +3288,7 @@ It's an extension of Gelu. It takes the sum of input A and bias input B as the i
 #endif
 
   RegisterQuantizationSchemas();
+  RegisterQOrderedSchemas();
 }
 }  // namespace contrib
 }  // namespace onnxruntime

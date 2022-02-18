@@ -28,6 +28,24 @@ void CublasLtMMAlgoMap::GetAlgo(cublasLtMatmulAlgo_t& algo, const cudaDeviceProp
   }
 }
 
+static int64_t
+CalcLeadingDimensionLt(int64_t rows, int64_t cols, cublasLtOrder_t order) {
+  switch (order) {
+    case CUBLASLT_ORDER_ROW:
+      return cols;
+    case CUBLASLT_ORDER_COL:
+      return rows;
+    case CUBLASLT_ORDER_COL32:
+      return 32 * rows;
+    case CUBLASLT_ORDER_COL4_4R2_8C:
+      return 32 * ((rows + 8 - 1) / 8) * 8;
+    case CUBLASLT_ORDER_COL32_2R_4R4:
+      return 32 * ((rows + 32 - 1) / 32) * 32;
+    default:
+      return 0;
+  }
+}
+
 void cublasLt_MatMul_int8(cublasLtHandle_t cublasLt_handle, cudaStream_t stream,
                           int batchCount, int m, int n, int k,
                           const float* alpha,
@@ -83,7 +101,7 @@ void cublasLt_MatMul_int8(cublasLtHandle_t cublasLt_handle, cudaStream_t stream,
   cublasLtMatmul(cublasLt_handle, matmul_desc,
                  &alpha, A, desc_A, B, desc_B,
                  &beta, C, (C == D ? desc_D : desc_C), D, desc_D,
-                 (algo_map != nullptr) ? (&algo) : (nullptr), nullptr, 0, //algo, workspace, workspace_size
+                 (algo_map != nullptr) ? (&algo) : (nullptr), nullptr, 0,  // algo, workspace, workspace_size
                  stream);
 
   cublasLtMatrixLayoutDestroy(desc_D);
