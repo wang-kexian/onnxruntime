@@ -22,7 +22,7 @@ struct CompiledObject {
 class Accelerator {
  public:
   Accelerator(const torch::jit::Node* node)
-      : subgraph_(node->g(torch::jit::attr::Subgraph)) {}
+      : subgraph_(node->g(torch::jit::attr::Subgraph)) { }
   // Execute a call to the torch::jit::Graph represented by "subgraph_".
   // This function could compile the graph and cache the result
   // for repeated uses.
