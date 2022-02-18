@@ -252,6 +252,12 @@ OrtValue CreateOrtScalarValue(const at::Scalar& scalar) {
   return ort_value;
 }
 
+// Per observation, this function is not currently needed because
+//  1. at::Scalar is used to represent C/C++ literal values,
+//     which are clearly not outputs of operators.
+//  2. LazyTensor only accepts at::Tensors. If we return at::Scalar, it throws.
+// We keep this function here for future reference.
+/*
 c10::IValue CreateC10IvalueScalar(OrtValue value) {
   onnxruntime::Tensor* tensor = value.GetMutable<onnxruntime::Tensor>();
   // Here we assume tensors with empty shape are at::Scalar's.
@@ -316,5 +322,6 @@ c10::IValue CreateC10IvalueScalar(OrtValue value) {
 
   return c10::IValue(new_value);
 }
+*/
 }  // namespace lazytensor
 }  // namespace onnxruntime

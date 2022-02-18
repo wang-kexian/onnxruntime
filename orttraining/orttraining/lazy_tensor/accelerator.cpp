@@ -64,7 +64,8 @@ std::string ToString(const c10::IValue& value) {
   if (value.isTensor()) {
     // Produce, e.g., Tensor<Float>(1024, 128)@cpu.
     const auto& tensor = value.toTensor();
-    ss << "Tensor" << "<" << c10::toString(tensor.scalar_type()) << ">";
+    ss << "Tensor"
+       << "<" << c10::toString(tensor.scalar_type()) << ">";
     if (tensor.sizes().empty()) {
     } else {
       ss << "(";
@@ -189,9 +190,48 @@ bool Accelerator::Supported(const torch::jit::Node* node) {
   }
 }
 
-void Accelerator::PthRun(torch::jit::Stack& stack) {
+void Accelerator::OrtRun(torch::jit::Stack& stack) {
   if (DumpGraph()) {
-    std::cout << "Pytorch run's graph: \n"
+    std::cout << "[ORT,Graph]\n"
+              << *subgraph_;
+  }
+
+  // Get these inputs from the stack.
+  at::ArrayRef<c10::IValue> inputs = torch::jit::last(stack, subgraph_->inputs().size());
+  // If we haven't compiled for the shape/device of these inputs before,
+  // do so now.
+  // Compile a callable to execute "subgraph_" on the inputs.
+  // If such input schema appears before, we can reuse a cached compiled callable.
+  torch::jit::CompleteArgumentSpec spec{false, inputs};
+  if (cache_.find(spec) == cache_.end()) {
+    cache_.emplace(spec, Compile(spec, inputs));
+  }
+
+  if (DumpInputsOutputs()) {
+    std::cout << "[ORT,Input] " << ToString(inputs) << std::endl;
+    ;
+  }
+
+  // Run the compiled function!
+  auto outputs = cache_[spec].code(inputs);
+
+  // Discard used inputs.
+  torch::jit::drop(stack, inputs.size());
+
+  // Return results to caller.
+  for (auto& output : outputs) {
+    stack.push_back(output);
+  }
+
+  if (DumpInputsOutputs()) {
+    at::ArrayRef<c10::IValue> outputs = torch::jit::last(stack, subgraph_->outputs().size());
+    std::cout << "[ORT,Output] " << ToString(outputs) << std::endl;
+  }
+}
+
+void Accelerator::PytorchRun(torch::jit::Stack& stack) {
+  if (DumpGraph()) {
+    std::cout << "[Pytorch,Graph]\n"
               << *subgraph_;
   }
   if (DumpInputsOutputs()) {
@@ -210,56 +250,23 @@ void Accelerator::PthRun(torch::jit::Stack& stack) {
   }
 }
 
-void Accelerator::Run(torch::jit::Stack& stack) {
+void Accelerator::DebugRun(torch::jit::Stack& stack) {
   torch::jit::Stack copy;
-  if (CheckBaseline()) {
-    copy = stack;
-    ORT_ENFORCE(CompareStack(stack, copy));
-  }
-
+  copy = stack;
   OrtRun(stack);
-
-  if (CheckBaseline()) {
-    PthRun(copy);
-    ORT_ENFORCE(CompareStack(stack, copy));
-  }
+  PytorchRun(copy);
+  ORT_ENFORCE(CompareStack(stack, copy),
+              "ORT and Pytorch must generate the same results \
+              but tensor types or shapes are different.");
 }
 
-void Accelerator::OrtRun(torch::jit::Stack& stack) {
-  if (DumpGraph()) {
-    std::cout << "ORT run's graph: \n"
-              << *subgraph_;
-  }
-
-  // Get these inputs from the stack.
-  at::ArrayRef<c10::IValue> inputs = torch::jit::last(stack, subgraph_->inputs().size());
-  // If we haven't compiled for the shape/device of these inputs before,
-  // do so now.
-  // Compile a callable to execute "subgraph_" on the inputs.
-  // If such input schema appears before, we can reuse a cached compiled callable.
-  torch::jit::CompleteArgumentSpec spec{false, inputs};
-  if (cache_.find(spec) == cache_.end()) {
-    cache_.emplace(spec, Compile(spec, inputs));
-  }
-
-  if (DumpInputsOutputs()) {
-    std::cout << "[ORT,Input] " << ToString(inputs) << std::endl;;
-  }
-
-  // Run the compiled function!
-  auto outputs = cache_[spec].code(inputs);
-
-  // Discard used inputs.
-  torch::jit::drop(stack, inputs.size());
-
-  // Return results to caller.
-  for (auto& output : outputs) {
-    stack.push_back(output);
-  }
-
-  if (DumpInputsOutputs()) {
-    at::ArrayRef<c10::IValue> outputs = torch::jit::last(stack, subgraph_->outputs().size());
-    std::cout << "[ORT,Output] " << ToString(outputs) << std::endl;
+void Accelerator::Run(torch::jit::Stack& stack) {
+  if (CheckBaseline()) {
+    // Run both ORT and Pytorch to execute the subgraph
+    // and compare their output types and shapes.
+    DebugRun(stack);
+  } else {
+    OrtRun(stack);
   }
 }
 
@@ -418,30 +425,19 @@ CompiledObject Accelerator::Compile(
       }
     }
 
-    std::cout << "Run" << std::endl;
     // Inputs are ready. Let's run ORT.
     ORT_THROW_IF_ERROR(sess.Run(
         run_options,
         feed_names, feeds,
         fetch_names, &fetches, &fetches_device_info));
-    std::cout << "Run done" << std::endl;
 
     // Convert ORT output to Pytorch format.
     std::vector<c10::IValue> outputs;
     for (auto value : fetches) {
       if (value.IsTensor()) {
-        onnxruntime::Tensor* tensor = value.GetMutable<onnxruntime::Tensor>();
-        const onnxruntime::TensorShape& tensor_shape = tensor->Shape();
-        if (tensor_shape.NumDimensions() > 0) {
-          // Create Pytorch tensor from ORT tensor without copy.
-          outputs.push_back(std::move(CreateC10IvalueTensor(value)));
-        } else if (tensor_shape.NumDimensions() == 0) {
-          outputs.push_back(std::move(CreateC10IvalueScalar(value)));
-        } else {
-          ORT_ENFORCE("Unsupported tensor shape.");
-        }
+        outputs.push_back(std::move(CreateC10IvalueTensor(value)));
       } else {
-        ORT_ENFORCE("Output must be tensor or scalar.");
+        ORT_ENFORCE("ORT must return tensors.");
       }
     }
 
