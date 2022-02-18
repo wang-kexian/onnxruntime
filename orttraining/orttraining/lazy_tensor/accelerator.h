@@ -31,14 +31,26 @@ class Accelerator {
   static bool Supported(const torch::jit::Node* node);
 
  private:
+  // This function calls "OrtRun" and "PytorchRun" to execute the graph
+  // and compare their results. It may fail if their results are different
+  // types or shapes.
   void DebugRun(torch::jit::Stack& stack);
+  // Execute the graph represented by "subgraph_" using ORT.
+  // Inputs are popped out from stack and outputs are pushed to stack.
   void OrtRun(torch::jit::Stack& stack);
+  // Similar to "OrtRun" but uses Pytorch as executor.
   void PytorchRun(torch::jit::Stack& stack);
+  // This function is used to check if inputs are tensors and scalars.
   void CheckArgs(const at::ArrayRef<c10::IValue>& args);
+  // Assign types to subgraph_.
   void PropagateArgTypes(const at::ArrayRef<c10::IValue>& args);
+  // Create callable to execute "subgraph_" given "args" as inputs.
+  // This calllable is cached for repeated uses.
   CompiledObject Compile(
       torch::jit::CompleteArgumentSpec spec, at::ArrayRef<c10::IValue>& args);
+  // The graph to be compiled and executed by ORT.
   std::shared_ptr<torch::jit::Graph> subgraph_;
+  // Previously compiled results.
   std::unordered_map<torch::jit::CompleteArgumentSpec, CompiledObject> cache_;
 };
 }  // namespace lazytensor
