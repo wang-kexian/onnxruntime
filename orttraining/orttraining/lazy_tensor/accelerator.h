@@ -40,10 +40,6 @@ class Accelerator {
   void OrtRun(torch::jit::Stack& stack);
   // Similar to "OrtRun" but uses Pytorch as executor.
   void PytorchRun(torch::jit::Stack& stack);
-  // This function is used to check if inputs are tensors and scalars.
-  void CheckArgs(const at::ArrayRef<c10::IValue>& args);
-  // Assign types to subgraph_.
-  void PropagateArgTypes(const at::ArrayRef<c10::IValue>& args);
   // Create callable to execute "subgraph_" given "args" as inputs.
   // This calllable is cached for repeated uses.
   CompiledObject Compile(

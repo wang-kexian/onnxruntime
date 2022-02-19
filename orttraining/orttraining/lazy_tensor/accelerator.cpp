@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 #include "accelerator.h"
+#include "flags.h"
 #include <iostream>
 #include <string>
 #include <torch/csrc/jit/passes/onnx.h>
@@ -12,8 +13,6 @@
 #include "core/framework/session_options.h"
 #include "core/session/environment.h"
 #include "python/onnxruntime_pybind_state_common.h"
-#include <cstdlib> /* getenv */
-#include <cstring>
 #include <sstream>
 
 namespace onnxruntime {
@@ -26,38 +25,6 @@ namespace prim = torch::jit::prim;
 // static variable used to create inference session and training session.
 const static std::string env_name = std::string("LTC");
 static std::unique_ptr<onnxruntime::Environment> ltc_env;
-
-bool IsEnvironmentVariableOne(const char* name) {
-  const auto flag = std::getenv(name);
-  if (flag == nullptr) {
-    return false;
-  }
-  const auto is_one = std::strcmp(flag, "1") == 0;
-  const auto is_zero = std::strcmp(flag, "0") == 0;
-  ORT_ENFORCE(is_one || is_zero,
-              "Must set ", name, "=0, ", name, "=1, or unset ", name);
-  return is_one;
-}
-
-// If returned value is true, run torch::jit::GraphExecutor
-// and compare its outputs with ORT's outputs.
-// Only types and shapes are compared.
-bool CheckBaseline() {
-  return IsEnvironmentVariableOne("ORTLTCHECKBASELINE");
-}
-
-// When returing true, we dump the inputs and outputs
-// when ORT (and Pytorch when ORTLTCHECKBASELINE is set to 1)
-// executes the subgraph.
-bool DumpInputsOutputs() {
-  return IsEnvironmentVariableOne("ORTLTDUMPINPUTSOUTPUTS");
-}
-
-// Returns true to dump the torch::jit::Graph ORT receives
-// from LazyTensor.
-bool DumpGraph() {
-  return IsEnvironmentVariableOne("ORTLTDUMPGRAPH");
-}
 
 std::string ToString(const c10::IValue& value) {
   std::stringstream ss;
@@ -270,7 +237,7 @@ void Accelerator::Run(torch::jit::Stack& stack) {
   }
 }
 
-void Accelerator::CheckArgs(
+static void CheckArgs(
     const at::ArrayRef<c10::IValue>& inputs) {
   // TODO: remove this check.
   TORCH_CHECK(inputs.size(), "Need at least one input.");
@@ -285,17 +252,22 @@ void Accelerator::CheckArgs(
 // in ORT.
 // TODO: Allow ORT to accept models without
 // input types. Then, we can remove this function.
-void Accelerator::PropagateArgTypes(
-    const at::ArrayRef<c10::IValue>& inputs) {
-  TORCH_CHECK(subgraph_->inputs().size() == inputs.size(),
+static void PropagateArgTypes(
+    const at::ArrayRef<c10::IValue>& inputs,
+    std::shared_ptr<torch::jit::Graph> graph) {
+  TORCH_CHECK(graph->inputs().size() == inputs.size(),
               "Number of provided inputs must match captured sub-graph's schema.");
-  const auto num_inputs = subgraph_->inputs().size();
-  for (size_t i = 0; i < num_inputs; ++i) {
-    auto input_symbol = subgraph_->inputs()[i];
+  for (size_t i = 0; i < graph->inputs().size(); ++i) {
+    auto input_symbol = graph->inputs()[i];
     auto input_value = inputs[i];
-    if (input_value.isTensor()) {
-      input_symbol->setType(input_value.type());
+    if (!input_value.isTensor()) {
+      // The allowed IR components in ONNX exporter and Pytorch
+      // are a little different. I am not confident to fill
+      // types other than tensor, because of the ambiguous scalar
+      // representations in Pytorch.
+      continue;
     }
+    input_symbol->setType(input_value.type());
   }
 }
 
@@ -304,7 +276,10 @@ void Accelerator::PropagateArgTypes(
 // Be aware of GIL issue.
 // The returned value is the path to exported
 // ONNX file.
-static std::string ExportToOnnx(std::shared_ptr<torch::jit::Graph> graph) {
+static std::string ExportToOnnx(
+  std::shared_ptr<torch::jit::Graph> graph,
+    const at::ArrayRef<c10::IValue>& args
+) {
   // ONNX exporter modifies the graph in-place, so we
   // need to clone it to avoid interaction between
   // Pytorch's JIT mechanism and ONNX graph.
@@ -316,6 +291,8 @@ static std::string ExportToOnnx(std::shared_ptr<torch::jit::Graph> graph) {
       pybind11::reinterpret_borrow<pybind11::function>(
           pybind11::module::import("torch.onnx.utils").attr("_optimize_graph_1"));
   // Execute Python function.
+
+  PropagateArgTypes(args, new_subgraph);
   auto result = export_to_onnx(new_subgraph, ::torch::onnx::OperatorExportTypes::ONNX);
   return result.cast<std::string>();
 }
@@ -356,26 +333,37 @@ static OrtDevice CheckAndGetTensorDevice(at::ArrayRef<c10::IValue>& values) {
   return CreateOrtDevice(unique_tensor_device);
 }
 
+// Initialize empty session with ONNX model.
+static void InitializeSession(
+  const std::string& model_path, onnxruntime::InferenceSession& sess) {
+  // Add EPs.
+#ifdef USE_CUDA
+  // When CUDA is enabled, some CUDA-only graph graph fusions are enabled.
+  // If we don't add CUDA EP, ONNX Runtime may throw even when running MNIST.
+  OrtCUDAProviderOptions provider_options{};
+  provider_options.do_copy_in_default_stream = true;
+  auto factory = onnxruntime::CreateExecutionProviderFactory_Cuda(&provider_options);
+  ORT_THROW_IF_ERROR(sess.RegisterExecutionProvider(factory->CreateProvider()));
+#endif
+  ORT_THROW_IF_ERROR(sess.Load(model_path));
+  ORT_THROW_IF_ERROR(sess.Initialize());
+}
+
 CompiledObject Accelerator::Compile(
     torch::jit::CompleteArgumentSpec spec, at::ArrayRef<c10::IValue>& args) {
+  CheckArgs(args);
+  // Storage of compilation.
   CompiledObject compiled;
   // Assign an empty session.
   compiled.sess = CreateSession();
   // Let's get the empty session and initialize it.
   onnxruntime::InferenceSession& sess = *compiled.sess;
-
-  OrtCUDAProviderOptions provider_options{};
-  provider_options.do_copy_in_default_stream = true;
-  auto factory = onnxruntime::CreateExecutionProviderFactory_Cuda(&provider_options);
-  ORT_THROW_IF_ERROR(sess.RegisterExecutionProvider(factory->CreateProvider()));
-
-  // Export from Pytorch and load ONNX model into session.
-  CheckArgs(args);
-  PropagateArgTypes(args);
-
-  const std::string model_path = ExportToOnnx(subgraph_);
-  ORT_THROW_IF_ERROR(sess.Load(model_path));
-  ORT_THROW_IF_ERROR(sess.Initialize());
+  // Export subgraph_ to ONNX.
+  const std::string model_path = ExportToOnnx(subgraph_, args);
+  // Load ONNX model into session, register
+  // EPs and finally initialize session.
+  InitializeSession(model_path, sess);
+  // Clean model file.
   ORT_ENFORCE(std::remove(model_path.c_str()) == 0, "Failed to remove temporary file: ", model_path);
 
   onnxruntime::RunOptions run_options;
@@ -396,9 +384,11 @@ CompiledObject Accelerator::Compile(
   // TODO: Force scalar to be on CPU since at::Scalar is CPU value.
   std::vector<OrtDevice> fetches_device_info(fetch_names.size(), shared_device);
 
-  auto code = [this, spec, run_options,
+  // Create a callable which feeds inputs to ORT
+  // session's Run(...) and returns outputs.
+  auto code = [this, run_options,
                feed_names, fetch_names,
-               fetches_device_info, &sess, model_path](at::ArrayRef<c10::IValue>& args) {
+               fetches_device_info, &sess](at::ArrayRef<c10::IValue>& args) {
     // Inputs of ORT session.
     std::vector<OrtValue> feeds;
     // Outputs of ORT session.
