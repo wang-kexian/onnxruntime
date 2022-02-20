@@ -38,10 +38,10 @@ static OnnxStatus ComputeOutputSizeValid(ptrdiff_t input_size, int stride, ptrdi
 }
 
 // padding_mode: 0, valid. 1, same
-static OnnxStatus ConvShapeInference(const ::ONNX_NAMESPACE::TensorShapeProto_Dimension& batch_shape, ptrdiff_t in_height, ptrdiff_t in_width,
-                                     ptrdiff_t in_channels, const ::ONNX_NAMESPACE::TensorShapeProto_Dimension& out_channels, ptrdiff_t filter_height,
-                                     ptrdiff_t filter_width, ptrdiff_t in_channels1, uint32_t strides_h,
-                                     uint32_t strides_w, int padding_mode, ::ONNX_NAMESPACE::TensorShapeProto_Dimension** output) {
+OnnxStatus ConvShapeInference(const ::ONNX_NAMESPACE::TensorShapeProto_Dimension& batch_shape, ptrdiff_t in_height, ptrdiff_t in_width,
+                              ptrdiff_t in_channels, const ::ONNX_NAMESPACE::TensorShapeProto_Dimension& out_channels, ptrdiff_t filter_height,
+                              ptrdiff_t filter_width, ptrdiff_t in_channels1, uint32_t strides_h,
+                              uint32_t strides_w, int padding_mode, ::ONNX_NAMESPACE::TensorShapeProto_Dimension** output) {
   if (in_channels != in_channels1) {
     return OnnxStatus(StatusCategory::NONE, StatusCode::FAIL);
   }
@@ -84,8 +84,8 @@ OnnxStatus XnnPackConvShapeInferImpl(::ONNX_NAMESPACE::TensorShapeProto& input_s
   int64_t filter_height = weight_shape.dim(1).dim_value();
   int64_t filter_width = weight_shape.dim(2).dim_value();
   int64_t in_channels = weight_shape.dim(3).dim_value();
-  input_H += input_padding_top + input_padding_bottom;
-  input_W += input_padding_right + input_padding_left;
+  input_H += static_cast<int64_t>(input_padding_top) + input_padding_bottom;
+  input_W += static_cast<int64_t>(input_padding_right） + input_padding_left;
   ::ONNX_NAMESPACE::TensorShapeProto_Dimension* output_dims[4];
 
   output_dims[0] = final_output_shape->add_dim();
@@ -136,8 +136,8 @@ OnnxStatus XnnPackDepthwiseConvolution2dShapeInferImpl(::ONNX_NAMESPACE::TensorS
                       "The last dim of weight is not multiple of input channels.");
   }
 #endif
-  input_H += input_padding_top + input_padding_bottom;
-  input_W += input_padding_right + input_padding_left;
+  input_H += static_cast<int64_t>(input_padding_top) + input_padding_bottom;
+  input_W += static_cast<int64_t>(input_padding_right) + input_padding_left;
   ::ONNX_NAMESPACE::TensorShapeProto_Dimension* output_dims[4];
   output_dims[0] = final_output_shape->add_dim();
   output_dims[1] = final_output_shape->add_dim();
