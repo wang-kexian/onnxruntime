@@ -38,33 +38,29 @@ static OnnxStatus ComputeOutputSizeValid(ptrdiff_t input_size, int stride, ptrdi
 }
 
 // padding_mode: 0, valid. 1, same
-static OnnxStatus ConvShapeInference(ptrdiff_t batch_shape, ptrdiff_t in_height, ptrdiff_t in_width,
-                                     ptrdiff_t in_channels, ptrdiff_t out_channels, ptrdiff_t filter_height,
+static OnnxStatus ConvShapeInference(const ::ONNX_NAMESPACE::TensorShapeProto_Dimension& batch_shape, ptrdiff_t in_height, ptrdiff_t in_width,
+                                     ptrdiff_t in_channels, const ::ONNX_NAMESPACE::TensorShapeProto_Dimension& out_channels, ptrdiff_t filter_height,
                                      ptrdiff_t filter_width, ptrdiff_t in_channels1, uint32_t strides_h,
-                                     uint32_t strides_w, int padding_mode, ptrdiff_t* output0, ptrdiff_t* output1,
-                                     ptrdiff_t* output2, ptrdiff_t* output3) {
+                                     uint32_t strides_w, int padding_mode, ::ONNX_NAMESPACE::TensorShapeProto_Dimension** output) {
   if (in_channels != in_channels1) {
     return OnnxStatus(StatusCategory::NONE, StatusCode::FAIL);
   }
 
-  *output0 = batch_shape;
+  *output[0] = batch_shape;
+  int64_t output1, output2;
   if (padding_mode == 1) {
-    ONNX_RETURN_IF_ERROR(ComputeOutputSizeSame(in_height, strides_h, output1));
-    ONNX_RETURN_IF_ERROR(ComputeOutputSizeSame(in_width, strides_w, output2));
+    ONNX_RETURN_IF_ERROR(ComputeOutputSizeSame(in_height, strides_h, &output1));
+    ONNX_RETURN_IF_ERROR(ComputeOutputSizeSame(in_width, strides_w, &output2));
   } else if (padding_mode == 0) {
-    ONNX_RETURN_IF_ERROR(ComputeOutputSizeValid(in_height, strides_h, filter_height, output1));
-    if (*output1 < 0) {
-      return OnnxStatus(StatusCategory::NONE, StatusCode::FAIL);
-    }
-    ONNX_RETURN_IF_ERROR(ComputeOutputSizeValid(in_width, strides_w, filter_width, output2));
-    if (*output2 < 0) {
-      return OnnxStatus(StatusCategory::NONE, StatusCode::FAIL);
-    }
+    ONNX_RETURN_IF_ERROR(ComputeOutputSizeValid(in_height, strides_h, filter_height, &output1));
+    ONNX_RETURN_IF_ERROR(ComputeOutputSizeValid(in_width, strides_w, filter_width, &output2));
   } else {
-    return OnnxStatus(StatusCategory::NONE, StatusCode::FAIL);
+    return OnnxStatus(StatusCategory::NONE, StatusCode::FAIL, "Invalid padding mode.");
   }
 
-  *output3 = out_channels;
+  *output[3] = out_channels;
+  output[1]->set_dim_value(output1);
+  output[2]->set_dim_value(output2);
   return ::ONNX_NAMESPACE::Common::Status::OK();
 }
 
@@ -81,25 +77,24 @@ OnnxStatus XnnPackConvShapeInferImpl(::ONNX_NAMESPACE::TensorShapeProto& input_s
   if (weight_shape.dim_size() != 4) {
     return OnnxStatus(StatusCategory::NONE, StatusCode::FAIL, "Weight tensor must have 4 dimensions");
   }
-  int64_t input_N = input_shape.dim(0).dim_value();
   int64_t input_H = input_shape.dim(1).dim_value();
   int64_t input_W = input_shape.dim(2).dim_value();
   int64_t input_C = input_shape.dim(3).dim_value();
 
-  int64_t out_channels = weight_shape.dim(0).dim_value();
   int64_t filter_height = weight_shape.dim(1).dim_value();
   int64_t filter_width = weight_shape.dim(2).dim_value();
   int64_t in_channels = weight_shape.dim(3).dim_value();
   input_H += input_padding_top + input_padding_bottom;
   input_W += input_padding_right + input_padding_left;
-  ptrdiff_t output_shape[4];
-  ONNX_RETURN_IF_ERROR(ConvShapeInference(input_N, input_H, input_W, input_C, out_channels, filter_height, filter_width,
+  ::ONNX_NAMESPACE::TensorShapeProto_Dimension* output_dims[4];
+
+  output_dims[0] = final_output_shape->add_dim();
+  output_dims[1] = final_output_shape->add_dim();
+  output_dims[2] = final_output_shape->add_dim();
+  output_dims[3] = final_output_shape->add_dim();
+  ONNX_RETURN_IF_ERROR(ConvShapeInference(input_shape.dim(0), input_H, input_W, input_C, weight_shape.dim(0), filter_height, filter_width,
                                           in_channels, subsampling_height, subsampling_width, padding_mode,
-                                          &output_shape[0], &output_shape[1], &output_shape[2], &output_shape[3]));
-  final_output_shape->add_dim()->set_dim_value(output_shape[0]);
-  final_output_shape->add_dim()->set_dim_value(output_shape[1]);
-  final_output_shape->add_dim()->set_dim_value(output_shape[2]);
-  final_output_shape->add_dim()->set_dim_value(output_shape[3]);
+                                          output_dims));  
   return OnnxStatus::OK();
 }
 
@@ -119,7 +114,6 @@ OnnxStatus XnnPackDepthwiseConvolution2dShapeInferImpl(::ONNX_NAMESPACE::TensorS
   }
 
 
-  int64_t input_N = input_shape.dim(0).dim_value();
   int64_t input_H = input_shape.dim(1).dim_value();
   int64_t input_W = input_shape.dim(2).dim_value();
   int64_t input_C = input_shape.dim(3).dim_value();
@@ -135,23 +129,23 @@ OnnxStatus XnnPackDepthwiseConvolution2dShapeInferImpl(::ONNX_NAMESPACE::TensorS
   }
   int64_t filter_height = weight_shape.dim(1).dim_value();
   int64_t filter_width = weight_shape.dim(2).dim_value();
+#if 0
   int64_t input_channels_by_depth_multiplier = weight_shape.dim(3).dim_value();
   if (input_channels_by_depth_multiplier % input_C != 0) {
     return OnnxStatus(StatusCategory::NONE, StatusCode::FAIL,
                       "The last dim of weight is not multiple of input channels.");
   }
-
+#endif
   input_H += input_padding_top + input_padding_bottom;
   input_W += input_padding_right + input_padding_left;
-  ptrdiff_t output_shape[4];
-  ONNX_RETURN_IF_ERROR(ConvShapeInference(input_N, input_H, input_W, input_C, input_channels_by_depth_multiplier,
+  ::ONNX_NAMESPACE::TensorShapeProto_Dimension* output_dims[4];
+  output_dims[0] = final_output_shape->add_dim();
+  output_dims[1] = final_output_shape->add_dim();
+  output_dims[2] = final_output_shape->add_dim();
+  output_dims[3] = final_output_shape->add_dim();
+  ONNX_RETURN_IF_ERROR(ConvShapeInference(input_shape.dim(0), input_H, input_W, input_C, weight_shape.dim(3),
                                           filter_height, filter_width, input_C, subsampling_height, subsampling_width,
-                                          padding_mode, &output_shape[0], &output_shape[1], &output_shape[2],
-                                          &output_shape[3]));
-  final_output_shape->add_dim()->set_dim_value(output_shape[0]);
-  final_output_shape->add_dim()->set_dim_value(output_shape[1]);
-  final_output_shape->add_dim()->set_dim_value(output_shape[2]);
-  final_output_shape->add_dim()->set_dim_value(output_shape[3]);
+                                          padding_mode, output_dims));
   return OnnxStatus::OK();
 }
 
