@@ -19,15 +19,15 @@
 
 #include "core/common/safeint.h"
 #include "core/xnnpack/build_kernel_info.h"
+#include "core/xnnpack/schema/xnnpack_onnx_defs.h"
 
 #define XNNPACK_CPU_MS_DOMAIN_OPERATOR_KERNEL(name, ver, builder, ...) \
-  ONNX_OPERATOR_KERNEL_EX(name, kMSDomain, ver, kCpuExecutionProvider, builder, __VA_ARGS__)
+  ONNX_OPERATOR_KERNEL_EX(name, kXNNPackDomain, ver, kCpuExecutionProvider, builder, __VA_ARGS__)
 
 namespace onnxruntime {
 namespace xnnpack {
 
-
-Status Conv<float>::Compute(OpKernelContext* context) const {
+Status Convolution2d::Compute(OpKernelContext* context) const {
   std::cout << "running " << context->GetNodeName() << std::endl;
   const auto* X = context->Input<Tensor>(0); 
   Tensor* Y = context->Output(0, output_shape);
@@ -44,9 +44,16 @@ Status Conv<float>::Compute(OpKernelContext* context) const {
 }
 
 XNNPACK_CPU_MS_DOMAIN_OPERATOR_KERNEL(
-    NhwcConv,
+    XnnPackConvolution2d,
     1,
     KernelDefBuilder().TypeConstraint("T", DataTypeImpl::GetTensorType<float>()),
-    Conv<float>);
+    Convolution2d);
+
+XNNPACK_CPU_MS_DOMAIN_OPERATOR_KERNEL(
+    XnnPackDepthwiseConvolution2d,
+    1,
+    KernelDefBuilder().TypeConstraint("T", DataTypeImpl::GetTensorType<float>()),
+    DepthWiseConvolution2d);
+
 }  // namespace xnnpack
 }  // namespace onnxruntime

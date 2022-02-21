@@ -138,7 +138,14 @@ static Status MergeShapeInfo(const std::string& output_name,
       ORT_UNUSED_PARAMETER(strict);
       ORT_UNUSED_PARAMETER(output_name);
       ORT_HANDLE_EXCEPTION([&]() {
-        status = ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Output:", output_name, " ", ex.what());
+        if (utils::HasShape(source) && utils::HasShape(target)) {
+          std::ostringstream oss;
+          oss << "Error merging shape info for output. '" << output_name
+              << "' source:" << utils::GetShape(source) << " target:" << utils::GetShape(target)
+              << ". Either the model is wrong or a shape infernce function is wrong. Exception message: " << ex.what();
+          status = Status(ONNXRUNTIME, FAIL, oss.str());
+        } else
+          status = ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Output:", output_name, " ", ex.what());
       });
     }
   }
@@ -2186,14 +2193,14 @@ Status Graph::InferAndVerifySubgraphTypes(const Node& node, Graph& subgraph,
 
 Status Graph::UpdateShapeInference(Node& node) {
   // We only use this during constant folding, and we don't constant fold control flow nodes.
-  if(!node.GetAttributeNameToMutableSubgraphMap().empty())
-      return Status(ONNXRUNTIME, FAIL,
-              "UpdateTypeShapeInference is not intended to be used with control flow nodes containing subgraphs");
+  if (!node.GetAttributeNameToMutableSubgraphMap().empty())
+    return Status(ONNXRUNTIME, FAIL,
+                  "UpdateTypeShapeInference is not intended to be used with control flow nodes containing subgraphs");
   if (!node.Op()) {
     if (!SetOpSchemaFromRegistryForNode(node) || !node.Op()) {
       return Status(ONNXRUNTIME, FAIL, "Can not run shape inference when schema is missing");
     }
-  }    
+  }
   // Whilst the type inferencing will run again we don't allow type overrides due to using the default
   // ResolveOptions settings, so essentially this can only change the shape information.
   return InferAndVerifyTypeMatch(node, *node.Op(), {});
@@ -2541,7 +2548,15 @@ Status Graph::VerifyNodeAndOpMatch(const ResolveOptions& options) {
       }
 
       if (!node.op_) {
-        return Status(ONNXRUNTIME, FAIL, "Fatal error: " + node.OpType() + " is not a registered function/op");
+        const auto domain_to_version_it = DomainToVersionMap().find(node.Domain());
+        if (domain_to_version_it == DomainToVersionMap().end()) {
+          return Status(ONNXRUNTIME, FAIL, "Fatal error: operator domain '" + node.Domain() + "' was not imported to the model.");
+        }
+        auto versions = this->schema_registry_->GetLatestOpsetVersions(false);
+        if (versions.find(node.Domain()) == versions.end()) {
+          return Status(ONNXRUNTIME, FAIL, "Fatal error: operator domain '" + node.Domain() + "' is not known by ONNX Runtime.");
+        }
+        return Status(ONNXRUNTIME, FAIL, "Fatal error: '" + node.Domain() + ":" + node.OpType() + "' is not a registered function/op. We cannot find schema for it.");
       }
 
       // For ops without schema (like model local functions set the since version after constructing the schema.
@@ -2800,7 +2815,12 @@ Status Graph::Resolve(const ResolveOptions& options) {
   // type/shape validation and inferencing on this and any subgraphs
   // recurses into subgraphs via the ONNX checker, which descends into the GraphProto in node attributes
   // which define a subgraph.
-  ORT_RETURN_IF_ERROR(PerformTypeAndShapeInferencing(options));
+  Status st = PerformTypeAndShapeInferencing(options);
+  if (!st.IsOK()) {
+    std::ostringstream oss;
+    oss << "Perform type and shape inferencing failed. Please check if the model is correct." << st.ErrorMessage();
+    return Status(st.Category(), st.Code(), oss.str());
+  }
 
   // perform the final steps for this graph and all subgraphs
   auto finalize_func = [&options](Graph& graph) {
