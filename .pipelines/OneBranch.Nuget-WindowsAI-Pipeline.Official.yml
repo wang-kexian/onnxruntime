@@ -49,6 +49,7 @@ extends:
             nugetConfigPath: NuGet.config
             restoreDirectory: '$(Build.BinariesDirectory)'
         - script: |
+            dir $(Build.BinariesDirectory)\python.3.9.10\tools
             echo '##vso[task.prependpath]$(Build.BinariesDirectory)\python.3.9.10\tools'
         - script: |
             where python
