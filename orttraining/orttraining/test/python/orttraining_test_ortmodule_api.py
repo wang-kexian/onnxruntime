@@ -1164,7 +1164,7 @@ def test_gradient_correctness_einsum(equation):
         rhs_shape.append(SIZE_MAP[c.upper()])
 
     pt_model = NeuralNetEinsum(lhs_shape[-1]).to(device)
-    ort_model = ORTModule(copy.deepcopy(pt_model))
+    ort_model = ORTModule(copy.deepcopy(pt_model), DebugOptions(save_onnx=True, onnx_prefix='debug'))
 
     def run_step(model, input_left, input_right):
         prediction = model(input_left, input_right)
@@ -4795,3 +4795,266 @@ def test_check_opset_is_default_opset_after_training():
     _test_helpers.assert_values_are_close(pt_loss, ort_loss)
     _test_helpers.assert_values_are_close(pt_x.grad, ort_x.grad)
     assert ortmodule_module.ONNX_OPSET_VERSION == DEFAULT_OPSET
+
+
+#
+# BFloat16 UTs
+#
+
+def torch_version_lower_than(v):
+    return LooseVersion(torch.__version__) < LooseVersion(v)
+
+
+@pytest.mark.skipif(torch_version_lower_than("1.11.0"),
+                    reason='PyTorch older than 1.11.0 has bugs for exporting model with bfloat16 tensor type')
+def test_bfloat16_add():
+    device = 'cuda'
+
+    class NeuralNetAdd(torch.nn.Module):
+        def __init__(self):
+            super(NeuralNetAdd, self).__init__()
+
+        def forward(self, x1, x2):
+            y = torch.add(x1, x2)
+            return y
+
+    def run_step(model, x1, x2):
+        prediction = model(x1, x2)
+        loss = prediction.sum()
+        loss.backward()
+        return prediction
+
+    N, D_in, H, D_out = 16, 784, 500, 10
+    
+    pt_model = NeuralNetAdd().to(device)
+    ort_model = ORTModule(copy.deepcopy(pt_model))
+
+    pt_x1_bf16 = torch.randn(N, dtype=torch.bfloat16, device=device, requires_grad=True)
+    pt_x2_bf16 = torch.randn(N, dtype=torch.bfloat16, device=device, requires_grad=True)
+
+    ort_x1_bf16 = pt_x1_bf16.clone().detach()
+    ort_x2_bf16 = pt_x2_bf16.clone().detach()
+    ort_x1_bf16.requires_grad = True
+    ort_x2_bf16.requires_grad = True
+
+    pt_y = run_step(pt_model, pt_x1_bf16, pt_x2_bf16)
+    ort_y = run_step(ort_model, ort_x1_bf16, ort_x2_bf16)
+
+    _test_helpers.assert_values_are_close(ort_y, pt_y, atol=2e-02)  # may need adjustment 
+    _test_helpers.assert_gradients_match_and_reset_gradient(ort_model, pt_model)
+
+
+@pytest.mark.skipif(torch_version_lower_than("1.11.0"),
+                    reason='PyTorch older than 1.11.0 has bugs for exporting model with bfloat16 tensor type')
+def test_bfloat16_matnmul():
+    class NeuralNetMatmul(torch.nn.Module):
+        def __init__(self):
+            super(NeuralNetMatmul, self).__init__()
+
+        def forward(self, x1, x2):
+            out = torch.matmul(x1, x2)
+            return out
+
+    def run_step(model, x1, x2):
+        prediction = model(x1, x2)
+        loss = prediction.sum()
+        loss.backward()
+        return prediction
+
+    device = 'cuda'
+    N, D_in, H, D_out = 16, 784, 500, 10
+    pt_model = NeuralNetMatmul().to(device)
+    ort_model = ORTModule(copy.deepcopy(pt_model))
+
+    pt_x1_bf16 = torch.randn(N, D_in, dtype=torch.bfloat16, device=device, requires_grad=True)
+    pt_x2_bf16 = torch.randn(D_in, D_in, dtype=torch.bfloat16, device=device, requires_grad=True)
+
+    ort_x1_bf16 = pt_x1_bf16.clone().detach()
+    ort_x2_bf16 = pt_x2_bf16.clone().detach()
+    ort_x1_bf16.requires_grad = True
+    ort_x2_bf16.requires_grad = True
+
+    pt_y = run_step(pt_model, pt_x1_bf16, pt_x2_bf16)
+    ort_y = run_step(ort_model, ort_x1_bf16, ort_x2_bf16)
+
+    _test_helpers.assert_values_are_close(ort_y, pt_y, atol=2e-02) 
+    _test_helpers.assert_gradients_match_and_reset_gradient(ort_model, pt_model)
+
+
+# this covers both OPs ReduceSum and Gemm
+@pytest.mark.skipif(torch_version_lower_than("1.11.0"),
+                    reason='PyTorch older than 1.11.0 has bugs for exporting model with bfloat16 tensor type')
+def test_bfloat16_reducesum():
+    class NeuralNetReduceSum(torch.nn.Module):
+        def __init__(self):
+            super(NeuralNetReduceSum, self).__init__()
+
+        def forward(self, x):
+            y = torch.sum(x)
+            return y
+
+    N, D, H, W = 16, 256, 128, 64
+    device = 'cuda'
+    pt_model = NeuralNetReduceSum().to(device)
+    ort_model = ORTModule(copy.deepcopy(pt_model))
+
+    def run_step(model, input):
+        prediction = model(input)
+        loss = prediction.sum()
+        loss.backward()
+        return prediction
+
+    pt_input = torch.rand((N, D, H), dtype=torch.bfloat16, device=device, requires_grad=True)
+    ort_input = copy.deepcopy(pt_input)
+    pt_prediction = run_step(pt_model, pt_input)
+    ort_prediction = run_step(ort_model, ort_input)
+
+    _test_helpers.assert_values_are_close(ort_prediction, pt_prediction)
+    _test_helpers.assert_values_are_close(ort_input.grad, pt_input.grad)
+
+
+@pytest.mark.skipif(torch_version_lower_than("1.11.0"),
+                    reason='PyTorch older than 1.11.0 has bugs for exporting model with bfloat16 tensor type')
+def test_bfloat16_cast():
+    class NeuralNetCast(torch.nn.Module):
+        def __init__(self):
+            super(NeuralNetCast, self).__init__()
+
+        def forward(self, x):
+            y = x.to(torch.float)
+            return y
+
+    N, D, H, W = 16, 256, 128, 64
+    device = 'cuda'
+    pt_model = NeuralNetCast().to(device)
+    ort_model = ORTModule(copy.deepcopy(pt_model))
+
+    def run_step(model, input):
+        prediction = model(input)
+        loss = prediction.sum()
+        loss.backward()
+        return prediction
+
+    pt_input = torch.randn(N, dtype=torch.bfloat16, device=device, requires_grad=True)
+    ort_input = copy.deepcopy(pt_input)
+    pt_prediction = run_step(pt_model, pt_input)
+    ort_prediction = run_step(ort_model, ort_input)
+
+    _test_helpers.assert_values_are_close(ort_prediction, pt_prediction)
+    _test_helpers.assert_values_are_close(ort_input.grad, pt_input.grad)
+
+
+@pytest.mark.skipif(torch_version_lower_than("1.11.0"),
+                    reason='PyTorch older than 1.11.0 has bugs for exporting model with bfloat16 tensor type')
+def test_bfloat16_softmax():
+    M, N = 24, 6
+
+    class NeuralNetSoftmax(torch.nn.Module):
+        def __init__(self):
+            super(NeuralNetSoftmax, self).__init__()
+            self.softmax = torch.nn.Softmax(dim=1)
+
+        def forward(self, x):
+            return self.softmax(x)
+
+    def run_step(model, x):
+        prediction = model(x)
+        loss = prediction.sum()
+        loss.backward()
+        return prediction, loss
+
+    device = 'cuda'
+    pt_model = NeuralNetSoftmax().to(device)
+    ort_model = ORTModule(copy.deepcopy(pt_model))
+
+    pt_x = torch.rand((M, N), dtype=torch.bfloat16, requires_grad=True, device=device)
+    ort_x = copy.deepcopy(pt_x)
+
+    pt_prediction, pt_loss = run_step(pt_model, pt_x)
+    ort_prediction, ort_loss = run_step(ort_model, ort_x)
+    _test_helpers.assert_values_are_close(pt_prediction, ort_prediction, atol=2e-02)
+    _test_helpers.assert_values_are_close(pt_loss, ort_loss, atol=2e-01)    # may need adjustment
+    _test_helpers.assert_values_are_close(pt_x.grad, ort_x.grad, atol=2e-02)
+
+
+#
+# UTs that don't support BFloat16 yet - need to enable BFloat16 for CUDA
+#
+
+
+# @pytest.mark.skipif(torch_version_lower_than("1.11.0"),
+#                     reason='PyTorch older than 1.11.0 has bugs for exporting model with bfloat16 tensor type')
+# def test_bfloat16_simple_math():
+#     device = 'cuda'
+
+#     class NeuralNetSimpleMath(torch.nn.Module):
+#         def __init__(self):
+#             super(NeuralNetSimpleMath, self).__init__()
+
+#         def forward(self, x1, x2):
+#             y = torch.mul(torch.add(x1, x2), torch.sub(x1, x2))
+#             return y
+
+#     def run_step(model, x1, x2):
+#         prediction = model(x1, x2)
+#         loss = prediction.sum()
+#         loss.backward()
+#         return prediction
+
+#     N, D_in, H, D_out = 16, 784, 500, 10
+    
+#     pt_model = NeuralNetSimpleMath().to(device)
+#     ort_model = ORTModule(copy.deepcopy(pt_model))
+
+#     pt_x1_bf16 = torch.randn(N, dtype=torch.bfloat16, device=device, requires_grad=True)
+#     pt_x2_bf16 = torch.randn(N, dtype=torch.bfloat16, device=device, requires_grad=True)
+
+#     ort_x1_bf16 = pt_x1_bf16.clone().detach()
+#     ort_x2_bf16 = pt_x2_bf16.clone().detach()
+#     ort_x1_bf16.requires_grad = True
+#     ort_x2_bf16.requires_grad = True
+
+#     pt_y = run_step(pt_model, pt_x1_bf16, pt_x2_bf16)
+#     ort_y = run_step(ort_model, ort_x1_bf16, ort_x2_bf16)
+
+#     _test_helpers.assert_values_are_close(ort_y, pt_y, atol=2e-02)  
+#     _test_helpers.assert_gradients_match_and_reset_gradient(ort_model, pt_model)
+
+
+# def test_bfloat16_relu():
+#     device = 'cuda'
+
+#     class NeuralNetRelu(torch.nn.Module):
+#         def __init__(self):
+#             super(NeuralNetRelu, self).__init__()
+#             self.relu = torch.nn.ReLU()
+
+#         def forward(self, x1, x2):
+#             y = self.relu(x1+x2)
+#             return y
+
+#     def run_step(model, x1, x2):
+#         prediction = model(x1, x2)
+#         loss = prediction.sum()
+#         loss.backward()
+#         return prediction
+
+#     N, D_in, H, D_out = 16, 784, 500, 10
+    
+#     pt_model = NeuralNetRelu().to(device)
+#     ort_model = ORTModule(copy.deepcopy(pt_model))
+
+#     pt_x1_bf16 = torch.randn(N, dtype=torch.bfloat16, device=device, requires_grad=True)
+#     pt_x2_bf16 = torch.randn(N, dtype=torch.bfloat16, device=device, requires_grad=True)
+
+#     ort_x1_bf16 = pt_x1_bf16.clone().detach()
+#     ort_x2_bf16 = pt_x2_bf16.clone().detach()
+#     ort_x1_bf16.requires_grad = True
+#     ort_x2_bf16.requires_grad = True
+
+#     pt_y = run_step(pt_model, pt_x1_bf16, pt_x2_bf16)
+#     ort_y = run_step(ort_model, ort_x1_bf16, ort_x2_bf16)
+
+#     _test_helpers.assert_values_are_close(ort_y, pt_y, atol=2e-02)  # need to adjust ....
+#     _test_helpers.assert_gradients_match_and_reset_gradient(ort_model, pt_model)
+
