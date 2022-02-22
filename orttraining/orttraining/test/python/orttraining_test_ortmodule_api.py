@@ -1164,7 +1164,7 @@ def test_gradient_correctness_einsum(equation):
         rhs_shape.append(SIZE_MAP[c.upper()])
 
     pt_model = NeuralNetEinsum(lhs_shape[-1]).to(device)
-    ort_model = ORTModule(copy.deepcopy(pt_model), DebugOptions(save_onnx=True, onnx_prefix='debug'))
+    ort_model = ORTModule(copy.deepcopy(pt_model))
 
     def run_step(model, input_left, input_right):
         prediction = model(input_left, input_right)
