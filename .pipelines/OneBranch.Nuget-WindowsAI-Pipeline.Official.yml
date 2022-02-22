@@ -40,7 +40,7 @@ extends:
             ob_symbolsPublishing_enabled: true
 
         steps:
-        - script: |   
+        - script: |
             where python
         - script: |
             @echo off
