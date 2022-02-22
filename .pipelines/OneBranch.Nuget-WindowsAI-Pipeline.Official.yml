@@ -23,6 +23,7 @@ extends:
       #   suppressionsFile: $(Build.SourcesDirectory)\.config\CredScanSuppressions.json
       policheck:
         break: true # always break the build on policheck issues. You can disable it by setting to 'false'
+        exclusionsFile: '$(REPOROOT)\tools\ci_build\policheck_exclusions.xml'
       # suppression:
       #   suppressionFile: $(Build.SourcesDirectory)\.gdn\global.gdnsuppress
 
@@ -40,8 +41,13 @@ extends:
             ob_symbolsPublishing_enabled: true
 
         steps:
-        - script: |
-            where python
+        - task: NuGetCommand@2
+          displayName: 'NuGet restore'
+          inputs:
+            restoreSolution: packages.config
+            feedsToUse: config
+            nugetConfigPath: NuGet.config
+            restoreDirectory: '$(Build.BinariesDirectory)'
         - script: |
             @echo off
             set vswherepath="%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
