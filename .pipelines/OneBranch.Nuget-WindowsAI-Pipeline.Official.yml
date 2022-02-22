@@ -49,6 +49,10 @@ extends:
             nugetConfigPath: NuGet.config
             restoreDirectory: '$(Build.BinariesDirectory)'
         - script: |
+            echo '##vso[task.prependpath]$(Build.BinariesDirectory)\python.3.9.10\tools'
+        - script: |
+            where python
+        - script: |
             @echo off
             set vswherepath="%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
             for /f "usebackq delims=" %%i in (`%vswherepath% -latest -property installationPath`) do (
