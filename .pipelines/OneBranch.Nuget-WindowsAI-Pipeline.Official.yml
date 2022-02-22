@@ -60,5 +60,5 @@ extends:
           inputs: 
             versionSpec: '3.7' 
             addToPath: true 
-              architecture: x64
+            architecture: 'x64'
   
