@@ -2,18 +2,18 @@
 // Licensed under the MIT License.
 
 #include "accelerator.h"
-#include "flags.h"
 #include <iostream>
 #include <string>
 #include <torch/csrc/jit/passes/onnx.h>
-#include "torch/csrc/jit/passes/shape_analysis.h"
+#include <torch/csrc/jit/passes/shape_analysis.h>
 #include <torch/torch.h>
-#include "bridge.h"
 #include "core/common/logging/sinks/clog_sink.h"
 #include "core/framework/session_options.h"
 #include "core/session/environment.h"
 #include "python/onnxruntime_pybind_state_common.h"
-#include <sstream>
+#include "bridge.h"
+#include "debug.h"
+#include "flags.h"
 
 namespace onnxruntime {
 namespace lazytensor {
@@ -25,93 +25,6 @@ namespace prim = torch::jit::prim;
 // static variable used to create inference session and training session.
 const static std::string env_name = std::string("LTC");
 static std::unique_ptr<onnxruntime::Environment> ltc_env;
-
-std::string ToString(const c10::IValue& value) {
-  std::stringstream ss;
-  if (value.isTensor()) {
-    // Produce, e.g., Tensor<Float>(1024, 128)@cpu.
-    const auto& tensor = value.toTensor();
-    ss << "Tensor"
-       << "<" << c10::toString(tensor.scalar_type()) << ">";
-    if (tensor.sizes().empty()) {
-    } else {
-      ss << "(";
-      for (int i = 0; i < tensor.dim(); i++) {
-        ss << tensor.sizes()[i];
-        if (i != tensor.dim() - 1) {
-          ss << ",";
-        }
-      }
-      ss << ")";
-    }
-    ss << "@" << tensor.device();
-  } else if (value.isScalar()) {
-    // Produce, e.g., Scalar<Float>, which is always on CPU.
-    ss << "Scalar<" << c10::toString(value.toScalar().type()) << ">";
-  } else {
-    ORT_THROW("Unsupported type.");
-  }
-  return ss.str();
-}
-
-bool CompareTensor(const at::Tensor& left, const at::Tensor& right) {
-  if (left.sizes() != right.sizes()) {
-    return false;
-  }
-  if (left.scalar_type() != right.scalar_type()) {
-    return false;
-  }
-  if (left.device() != right.device()) {
-    return false;
-  }
-  // Uncomment the following line to compare the content of the tensors.
-  // if (!at::allclose(left, right)) {
-  //   return false;
-  // }
-  return true;
-}
-
-bool CompareScalar(const at::Scalar& left, const at::Scalar& right) {
-  if (left.type() == right.type()) {
-    return true;
-  } else {
-    return false;
-  }
-}
-
-bool Compare(const c10::IValue& left, const c10::IValue& right) {
-  if (left.isTensor() && right.isTensor()) {
-    return CompareTensor(left.toTensor(), right.toTensor());
-  } else if (left.isScalar() && right.isScalar()) {
-    return CompareScalar(left.toScalar(), right.toScalar());
-  } else {
-    return false;
-  }
-}
-
-bool CompareStack(const torch::jit::Stack& left, const torch::jit::Stack& right) {
-  if (left.size() != right.size()) {
-    return false;
-  }
-  for (size_t i = 0; i < left.size(); i++) {
-    if (!Compare(left[i], right[i])) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// Print last n elements in the stack.
-std::string ToString(const at::ArrayRef<c10::IValue>& values) {
-  std::stringstream ss;
-  for (size_t i = 0; i < values.size(); i++) {
-    ss << ToString(values.at(i));
-    if (i != values.size() - 1) {
-      ss << ", ";
-    }
-  }
-  return ss.str();
-}
 
 onnxruntime::Environment& GetLtcEnv() {
   if (!ltc_env) {
@@ -276,10 +189,12 @@ static void PropagateArgTypes(
 // Be aware of GIL issue.
 // The returned value is the path to exported
 // ONNX file.
+//
+// TODO: Instead of using file, we should return
+// in-memory data structure from Python.
 static std::string ExportToOnnx(
-  std::shared_ptr<torch::jit::Graph> graph,
-    const at::ArrayRef<c10::IValue>& args
-) {
+    std::shared_ptr<torch::jit::Graph> graph,
+    const at::ArrayRef<c10::IValue>& args) {
   // ONNX exporter modifies the graph in-place, so we
   // need to clone it to avoid interaction between
   // Pytorch's JIT mechanism and ONNX graph.
@@ -290,9 +205,10 @@ static std::string ExportToOnnx(
   pybind11::function export_to_onnx =
       pybind11::reinterpret_borrow<pybind11::function>(
           pybind11::module::import("torch.onnx.utils").attr("_optimize_graph_1"));
-  // Execute Python function.
-
+  // Fill types up. The sub-graphp from LazyTensor doesn't
+  // contain input shapes.
   PropagateArgTypes(args, new_subgraph);
+  // Execute Python function.
   auto result = export_to_onnx(new_subgraph, ::torch::onnx::OperatorExportTypes::ONNX);
   return result.cast<std::string>();
 }
@@ -335,7 +251,7 @@ static OrtDevice CheckAndGetTensorDevice(at::ArrayRef<c10::IValue>& values) {
 
 // Initialize empty session with ONNX model.
 static void InitializeSession(
-  const std::string& model_path, onnxruntime::InferenceSession& sess) {
+    const std::string& model_path, onnxruntime::InferenceSession& sess) {
   // Add EPs.
 #ifdef USE_CUDA
   // When CUDA is enabled, some CUDA-only graph graph fusions are enabled.

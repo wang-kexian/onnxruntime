@@ -20,24 +20,43 @@ bool IsEnvironmentVariableOne(const char* name) {
   return is_one;
 }
 
-// If returned value is true, run torch::jit::GraphExecutor
-// and compare its outputs with ORT's outputs.
-// Only types and shapes are compared.
-bool CheckBaseline() {
-  return IsEnvironmentVariableOne("ORTLTCHECKBASELINE");
+double GetEnvironmentVariableDoubleOrDefault(const char* name, const double default_value) {
+  const auto number = std::getenv(name);
+  if (!number) {
+    return default_value;
+  }
+  return std::atof(number);
 }
 
-// When returing true, we dump the inputs and outputs
-// when ORT (and Pytorch when ORTLTCHECKBASELINE is set to 1)
-// executes the subgraph.
 bool DumpInputsOutputs() {
-  return IsEnvironmentVariableOne("ORTLTDUMPINPUTSOUTPUTS");
+  return IsEnvironmentVariableOne("ORT_LT_DUMP_INPUTS_OUTPUTS");
 }
 
-// Returns true to dump the torch::jit::Graph ORT receives
-// from LazyTensor.
 bool DumpGraph() {
-  return IsEnvironmentVariableOne("ORTLTDUMPGRAPH");
+  return IsEnvironmentVariableOne("ORT_LT_DUMP_GRAPH");
+}
+
+bool CheckBaseline() {
+  return IsEnvironmentVariableOne("ORT_LT_CHECK_BASELINE");
+}
+
+bool CheckTensorContent() {
+  ORT_ENFORCE(CheckBaseline(), "Must set ORT_LT_CHECK_BASELINE=1 to check tensor content.");
+  return IsEnvironmentVariableOne("ORT_LT_CHECK_TENSOR_CONTENT");
+}
+
+double AbsoluteTolerance() {
+  ORT_ENFORCE(CheckBaseline() && CheckTensorContent(),
+              "Do not set ORT_LT_ABSOLUTE_TOLERANCE unless \
+              ORT_LT_CHECK_TENSOR_CONTENT and ORT_LT_CHECK_BASELINE are set.");
+  return GetEnvironmentVariableDoubleOrDefault("ORT_LT_ABSOLUTE_TOLERANCE", 1e-8);
+}
+
+double RelativeTolerance() {
+  ORT_ENFORCE(CheckBaseline() && CheckTensorContent(),
+              "Do not set ORT_LT_RELATIVE_TOLERANCE unless \
+              ORT_LT_CHECK_TENSOR_CONTENT and ORT_LT_CHECK_BASELINE are set.");
+  return GetEnvironmentVariableDoubleOrDefault("ORT_LT_RELATIVE_TOLERANCE", 1e-5);
 }
 }  // namespace lazytensor
 }  // namespace onnxruntime
