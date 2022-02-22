@@ -43,45 +43,38 @@ extends:
       #   suppressionFile: $(Build.SourcesDirectory)\.gdn\global.gdnsuppress
 
     stages:
-    - stage: linux_stage
+    - stage: Windows_Build
       jobs:
-      - job: linux_job
+      - job: main
         pool:
-          type: linux
+          type: windows  
+        
+        variables:
+          ob_outputDirectory: '$(REPOROOT)\out'
+          ob_sdl_binskim_break: true 
+          ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/master') }}:
+            ob_symbolsPublishing_enabled: true
 
-        variables: # More settings at https://aka.ms/obpipelines/yaml/jobs
-          ob_outputDirectory: '$(Build.SourcesDirectory)/out' # this directory is uploaded to pipeline artifacts, reddog and cloudvault. More info at https://aka.ms/obpipelines/artifacts
-
-        steps: # These steps will be run in unrestricted container's network
-          - task: onebranch.pipeline.version@1
-            displayName: 'Setup BuildNumber'
-            inputs:
-              system: 'RevisionCounter'
-              major: '1'
-              minor: '0'
-              exclude_commit: true
-
-          - task: Bash@3
-            displayName: 'Restore'
-            inputs:
-              filePath: '$(Build.SourcesDirectory)/restore.sh'
-
-          - task: Bash@3
-            displayName: 'Build'
-            inputs:
-              filePath: '$(Build.SourcesDirectory)/build.sh'
-
-          - task: Bash@3
-            displayName: 'Package'
-            inputs:
-              filePath: '$(Build.SourcesDirectory)/package.sh'
-
-          - task: Bash@3
-            displayName: 'Copy Extra Files'
-            inputs:
-              targetType: 'inline'
-              script: |
-                mkdir -p $(Build.SourcesDirectory)/out
-                cp -a $(Build.SourcesDirectory)/linux_deploy $(Build.SourcesDirectory)/out
-                cp $(Build.SourcesDirectory)/*.tgz $(Build.SourcesDirectory)/out
-                cp $(Build.SourcesDirectory)/*.tgz.sha256 $(Build.SourcesDirectory)/out
+        steps:        
+        - script: |
+            @echo off
+            set vswherepath="%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+            for /f "usebackq delims=" %%i in (`%vswherepath% -latest -property installationPath`) do (
+              set vslatest="%%i"
+              if exist "%%i\Common7\Tools\vsdevcmd.bat" (
+                set vsdevcmd="%%i\Common7\Tools\vsdevcmd.bat"
+              )
+            )
+            
+            @echo vslatest %vslatest%
+            @echo vsdevcmd %vsdevcmd%
+            
+            @echo ##vso[task.setvariable variable=vslatest]%vslatest%
+            @echo ##vso[task.setvariable variable=vsdevcmd]%vsdevcmd%
+          displayName: 'locate vsdevcmd via vswhere'
+        - task: UsePythonVersion@0
+          inputs: 
+            versionSpec: '3.7' 
+            addToPath: true 
+              architecture: x64
+  
