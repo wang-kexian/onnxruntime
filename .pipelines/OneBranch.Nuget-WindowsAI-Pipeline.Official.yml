@@ -23,7 +23,7 @@ extends:
       #   suppressionsFile: $(Build.SourcesDirectory)\.config\CredScanSuppressions.json
       policheck:
         break: true # always break the build on policheck issues. You can disable it by setting to 'false'
-        exclusionsFile: '$(REPOROOT)\tools\ci_build\policheck_exclusions.xml'
+        exclusionsFile: '$(Build.SourcesDirectory)\tools\ci_build\policheck_exclusions.xml'
       # suppression:
       #   suppressionFile: $(Build.SourcesDirectory)\.gdn\global.gdnsuppress
 
@@ -49,8 +49,7 @@ extends:
             nugetConfigPath: NuGet.config
             restoreDirectory: '$(Build.BinariesDirectory)'
         - script: |
-            dir $(Build.BinariesDirectory)\python.3.9.10\tools
-            echo '##vso[task.prependpath]$(Build.BinariesDirectory)\python.3.9.10\tools'
+            echo '##vso[task.setvariable variable=path]$(Build.BinariesDirectory)\python.3.9.10\tools;$(PATH)'
         - script: |
             where python
         - script: |
