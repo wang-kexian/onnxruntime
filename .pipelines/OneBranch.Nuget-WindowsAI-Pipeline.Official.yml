@@ -74,9 +74,8 @@ extends:
           
           
       - job: NuGet_Packaging
-        workspace:
-          clean: all
-        pool: 'onnxruntime-gpu-winbuild'
+        pool:
+          type: windows
         dependsOn:
         - Windows_Packaging_x64_dynamic
         - Windows_Packaging_x86_dynamic
