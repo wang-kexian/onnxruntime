@@ -4,7 +4,7 @@ parameters:
   PythonPackageName: python
 
 jobs:
-- job: Windows_Packaging_${{ parameters.BuildArch }}
+- job: Windows_Packaging_${{ parameters.BuildArch }}_${{ parameters.Runtime }}
   pool:
     type: windows  
     
