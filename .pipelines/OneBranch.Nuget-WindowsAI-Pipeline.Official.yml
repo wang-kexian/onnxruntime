@@ -348,4 +348,4 @@ extends:
               Start-Process -FilePath $zip_tool -ArgumentList "-r $merged_nuget ." -WorkingDirectory $x64_nupkg_unzipped_directory -NoNewWindow -Wait
 
               Copy-Item -Path $merged_nuget -Destination $merged_nuget_as_zip
-              workingDirectory: $(Build.BinariesDirectory)\nuget-artifact-x64
+            workingDirectory: $(Build.BinariesDirectory)\nuget-artifact-x64
