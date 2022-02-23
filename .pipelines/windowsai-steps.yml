@@ -9,7 +9,7 @@ jobs:
     type: windows  
     
   variables:
-    ob_outputDirectory: '$(REPOROOT)\out'
+    ob_outputDirectory: '$(Build.ArtifactStagingDirectory)'
     ob_sdl_binskim_break: true 
     ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/master') }}:
       ob_symbolsPublishing_enabled: true
@@ -50,7 +50,7 @@ jobs:
         @echo vsdevcmd %vsdevcmd%
         
         @echo ##vso[task.setvariable variable=vslatest]%vslatest%
-        @echo ##vso[task.setvariable variable=vsdevcmd]%vsdevcmd%
+        @echo ##vso[task.setvariable variable=vsdevcmd]%vsdevcmd% -arch=${{ parameters.BuildArch }}
       displayName: 'locate vsdevcmd via vswhere'
 
     - powershell: |
@@ -76,6 +76,7 @@ jobs:
     # must call vsdevcmd first to add cmake to PATH
     - script: |
         call $(vsdevcmd)
+        echo $(vsdevcmd)
         python "$(Build.SourcesDirectory)\tools\ci_build\build.py" --build_dir $(Build.BinariesDirectory) --build_shared_lib --enable_onnx_tests --ms_experimental --use_dml --use_winml --cmake_generator "Visual Studio 16 2019" --update --config RelWithDebInfo --enable_lto --disable_rtti $(BuildFlags) --cmake_extra_defines CMAKE_SYSTEM_VERSION=10.0.19041.0
       workingDirectory: '$(Build.BinariesDirectory)'
       displayName: 'Generate cmake config'
@@ -94,3 +95,29 @@ jobs:
         logProjectEvents: true
         workingFolder: '$(Build.BinariesDirectory)\RelWithDebInfo'
         createLogFile: true 
+
+    - ${{ if eq(parameters.Runtime, 'dynamic') }}:
+      - script: |
+         xcopy $(Build.BinariesDirectory)\RelWithDebInfo\RelWithDebInfo\winml_test_api.exe $(Build.ArtifactStagingDirectory)\test_artifact\
+         copy $(Build.BinariesDirectory)\RelWithDebInfo\RelWithDebInfo\winml_test_scenario.exe $(Build.ArtifactStagingDirectory)\test_artifact\
+         copy $(Build.SourcesDirectory)\winml\test\api\models\*.onnx $(Build.ArtifactStagingDirectory)\test_artifact\
+         copy $(Build.SourcesDirectory)\winml\test\scenario\cppwinrt\*.onnx $(Build.ArtifactStagingDirectory)\test_artifact\
+         copy $(Build.SourcesDirectory)\winml\test\scenario\models\*.onnx $(Build.ArtifactStagingDirectory)\test_artifact\
+         copy $(Build.SourcesDirectory)\winml\test\common\testdata\squeezenet\* $(Build.ArtifactStagingDirectory)\test_artifact\
+         copy $(Build.SourcesDirectory)\winml\test\collateral\models\*.onnx $(Build.ArtifactStagingDirectory)\test_artifact\
+         xcopy $(Build.SourcesDirectory)\winml\test\collateral\models\ModelSubdirectory $(Build.ArtifactStagingDirectory)\test_artifact\ModelSubdirectory\ /i
+         copy $(Build.SourcesDirectory)\winml\test\collateral\images\*.png $(Build.ArtifactStagingDirectory)\test_artifact\
+         copy $(Build.SourcesDirectory)\winml\test\collateral\images\*.jpg $(Build.ArtifactStagingDirectory)\test_artifact\
+         copy $(Build.SourcesDirectory)\onnxruntime\test\testdata\sequence_length.onnx $(Build.ArtifactStagingDirectory)\test_artifact\
+         copy $(Build.SourcesDirectory)\onnxruntime\test\testdata\sequence_construct.onnx $(Build.ArtifactStagingDirectory)\test_artifact\
+        displayName: 'Copy WinML test collateral to artifact directory'
+        
+        
+    - ${{ if eq(parameters.BuildArch, 'x64') }}:
+      - script: |
+          call $(vsdevcmd)
+          msbuild Microsoft.AI.MachineLearning.Interop.csproj /p:Configuration=RelWithDebInfo /p:Platform="Any CPU" /p:OnnxRuntimeBuildDirectory=$(Build.BinariesDirectory) -restore
+        workingDirectory: '$(Build.SourcesDirectory)\csharp\src\Microsoft.AI.MachineLearning.Interop'
+        displayName: 'Build Microsoft.AI.MachineLearning.Interop.dll'
+
+        
