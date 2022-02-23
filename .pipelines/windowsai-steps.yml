@@ -76,7 +76,7 @@ jobs:
     # must call vsdevcmd first to add cmake to PATH
     - script: |
         call $(vsdevcmd)
-        python '$(Build.SourcesDirectory)\tools\ci_build\build.py' --build_dir $(Build.BinariesDirectory) --build_shared_lib --enable_onnx_tests --ms_experimental --use_dml --use_winml --cmake_generator "Visual Studio 16 2019" --update --config RelWithDebInfo --enable_lto --disable_rtti $(BuildFlags) --cmake_extra_defines CMAKE_SYSTEM_VERSION=10.0.19041.0
+        python "$(Build.SourcesDirectory)\tools\ci_build\build.py" --build_dir $(Build.BinariesDirectory) --build_shared_lib --enable_onnx_tests --ms_experimental --use_dml --use_winml --cmake_generator "Visual Studio 16 2019" --update --config RelWithDebInfo --enable_lto --disable_rtti $(BuildFlags) --cmake_extra_defines CMAKE_SYSTEM_VERSION=10.0.19041.0
       workingDirectory: '$(Build.BinariesDirectory)'
       displayName: 'Generate cmake config'
 
