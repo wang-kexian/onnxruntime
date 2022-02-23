@@ -32,4 +32,4 @@ extends:
       jobs:
       - template: .pipelines/windowsai-steps.yml@self
         parameters:
-          BuildArch: x86
+          BuildArch: x64
