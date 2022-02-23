@@ -5,7 +5,7 @@ parameters:
 jobs:
 - job: Windows_Packaging_${{ parameters.BuildArch }}
   steps:
-    ${{ if eq(parameters.BuildArch, 'x64') }}:
+    - ${{ if eq(parameters.BuildArch, 'x64') }}:
       - task: NuGetCommand@2
         displayName: 'NuGet restore'
         inputs:
