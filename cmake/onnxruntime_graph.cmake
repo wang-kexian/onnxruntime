@@ -50,12 +50,8 @@ if(NOT onnxruntime_USE_DML)
     )
 endif()
 
-if(onnxruntime_graph_src_exclude_patterns)
-  file(GLOB onnxruntime_graph_src_exclude ${onnxruntime_graph_src_exclude_patterns})
-endif()
-if(onnxruntime_graph_src_exclude)
-  list(REMOVE_ITEM onnxruntime_graph_src ${onnxruntime_graph_src_exclude})
-endif()
+file(GLOB onnxruntime_graph_src_exclude ${onnxruntime_graph_src_exclude_patterns})
+list(REMOVE_ITEM onnxruntime_graph_src ${onnxruntime_graph_src_exclude})
 
 file(GLOB_RECURSE onnxruntime_ir_defs_src CONFIGURE_DEPENDS
   "${ONNXRUNTIME_ROOT}/core/defs/*.cc"
