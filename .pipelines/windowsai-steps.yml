@@ -14,7 +14,7 @@ jobs:
     ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/master') }}:
       ob_symbolsPublishing_enabled: true
   steps:
-    - template: tools/ci_build/github/azure-pipelines/templates/telemetry-steps.yml@self
+    - template: ../tools/ci_build/github/azure-pipelines/templates/telemetry-steps.yml@self
 
     - task: NuGetCommand@2
       displayName: 'NuGet restore'
