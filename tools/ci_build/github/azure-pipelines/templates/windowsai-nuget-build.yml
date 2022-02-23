@@ -144,7 +144,7 @@ steps:
   # Esrp signing
   - template: win-esrp-dll.yml
     parameters:
-      FolderPath: '$(Build.BinariesDirectory)\RelWithDebInfo'
+      FolderPath: '$(Build.BinariesDirectory)\RelWithDebInfo\RelWithDebInfo'
       DisplayName: 'ESRP - Sign Native dlls'
       DoEsrp: 'true'
 

@@ -23,6 +23,8 @@ extends:
       #   suppressionsFile: $(Build.SourcesDirectory)\.config\CredScanSuppressions.json
       prefast:
         enabled: true
+      cg:
+        failOnAlert: false
       policheck:
         break: true # always break the build on policheck issues. You can disable it by setting to 'false'
         exclusionsFile: '$(Build.SourcesDirectory)\tools\ci_build\policheck_exclusions.xml'
