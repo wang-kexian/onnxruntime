@@ -1,9 +1,10 @@
 parameters:
   BuildArch: 'x64'
   Runtime: 'dynamic'
-  
-steps:
-  #- template: telemetry-steps.yml
+
+jobs:
+- job: Windows_Packaging_${{ parameters.BuildArch }}
+  steps:
     - task: NuGetCommand@2
       displayName: 'NuGet restore'
       inputs:
