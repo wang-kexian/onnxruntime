@@ -78,62 +78,62 @@ extends:
           clean: all
         pool: 'onnxruntime-gpu-winbuild'
         dependsOn:
-        - WindowsAI_DirectML_X64
-        - WindowsAI_DirectML_X86
-        - WindowsAI_DirectML_ARM64
-        - WindowsAI_DirectML_ARM
-        - WindowsAI_DirectML_X64_StaticRuntime
-        - WindowsAI_DirectML_X86_StaticRuntime
-        - WindowsAI_DirectML_ARM64_StaticRuntime
-        - WindowsAI_DirectML_ARM_StaticRuntime
+        - Windows_Packaging_x64_dynamic
+        - Windows_Packaging_x86_dynamic
+        - Windows_Packaging_arm_dynamic
+        - Windows_Packaging_arm64_dynamic
+        - Windows_Packaging_x64_static
+        - Windows_Packaging_x86_static
+        - Windows_Packaging_arm_static
+        - Windows_Packaging_arm64_static
         condition: succeeded()
         steps:
         - task: DownloadPipelineArtifact@0
           displayName: 'Download Pipeline Artifact - NuGet DirectML x64'
           inputs:
-            artifactName: 'Microsoft.AI.MachineLearning.x64'
+            artifactName: 'drop_Windows_Build_Windows_Packaging_x64_dynamic'
             targetPath: '$(Build.BinariesDirectory)/nuget-artifact-x64'
 
         - task: DownloadPipelineArtifact@0
           displayName: 'Download Pipeline Artifact - NuGet DirectML x86'
           inputs:
-            artifactName: 'Microsoft.AI.MachineLearning.x86'
+            artifactName: 'drop_Windows_Build_Windows_Packaging_x86_dynamic'
             targetPath: '$(Build.BinariesDirectory)/nuget-artifact-x86'
       
         - task: DownloadPipelineArtifact@0
           displayName: 'Download Pipeline Artifact - NuGet DirectML arm64'
           inputs:
-            artifactName: 'Microsoft.AI.MachineLearning.arm64'
+            artifactName: 'drop_Windows_Build_Windows_Packaging_arm64_dynamic'
             targetPath: '$(Build.BinariesDirectory)/nuget-artifact-arm64'
 
         - task: DownloadPipelineArtifact@0
           displayName: 'Download Pipeline Artifact - NuGet DirectML arm'
           inputs:
-            artifactName: 'Microsoft.AI.MachineLearning.arm'
+            artifactName: 'drop_Windows_Build_Windows_Packaging_arm_dynamic'
             targetPath: '$(Build.BinariesDirectory)/nuget-artifact-arm'
 
         - task: DownloadPipelineArtifact@0
           displayName: 'Download Pipeline Artifact - NuGet DirectML x64 StaticRuntime'
           inputs:
-            artifactName: 'Microsoft.AI.MachineLearning.x64.StaticRuntime'
+            artifactName: 'drop_Windows_Build_Windows_Packaging_x64_static'
             targetPath: '$(Build.BinariesDirectory)/nuget-artifact-x64-static-runtime'
 
         - task: DownloadPipelineArtifact@0
           displayName: 'Download Pipeline Artifact - NuGet DirectML x86 StaticRuntime'
           inputs:
-            artifactName: 'Microsoft.AI.MachineLearning.x86.StaticRuntime'
+            artifactName: 'drop_Windows_Build_Windows_Packaging_x86_static'
             targetPath: '$(Build.BinariesDirectory)/nuget-artifact-x86-static-runtime'
 
         - task: DownloadPipelineArtifact@0
           displayName: 'Download Pipeline Artifact - NuGet DirectML arm64 StaticRuntime'
           inputs:
-            artifactName: 'Microsoft.AI.MachineLearning.arm64.StaticRuntime'
+            artifactName: 'drop_Windows_Build_Windows_Packaging_arm64_static'
             targetPath: '$(Build.BinariesDirectory)/nuget-artifact-arm64-static-runtime'
 
         - task: DownloadPipelineArtifact@0
           displayName: 'Download Pipeline Artifact - NuGet DirectML arm StaticRuntime'
           inputs:
-            artifactName: 'Microsoft.AI.MachineLearning.arm.StaticRuntime'
+            artifactName: 'drop_Windows_Build_Windows_Packaging_arm_static'
             targetPath: '$(Build.BinariesDirectory)/nuget-artifact-arm-static-runtime'
 
         - task: PowerShell@2
