@@ -21,13 +21,13 @@ jobs:
         nugetConfigPath: NuGet.config
         restoreDirectory: '$(Build.BinariesDirectory)'
         ${{ if eq(parameters.BuildArch, 'x64') }}:
-          restoreSolution: $(Build.BinariesDirectory)\.pipelines\nuget_config\x64\packages.config
+          restoreSolution: $(Build.SourcesDirectory)\.pipelines\nuget_config\x64\packages.config
         ${{ if eq(parameters.BuildArch, 'x86') }}:
-          restoreSolution: $(Build.BinariesDirectory)\.pipelines\nuget_config\x86\packages.config
+          restoreSolution: $(Build.SourcesDirectory)\.pipelines\nuget_config\x86\packages.config
         ${{ if eq(parameters.BuildArch, 'arm') }}:
-          restoreSolution: $(Build.BinariesDirectory)\.pipelines\nuget_config\x64\packages.config
+          restoreSolution: $(Build.SourcesDirectory)\.pipelines\nuget_config\x64\packages.config
         ${{ if eq(parameters.BuildArch, 'arm64') }}:
-          restoreSolution: $(Build.BinariesDirectory)\.pipelines\nuget_config\x64\packages.config
+          restoreSolution: $(Build.SourcesDirectory)\.pipelines\nuget_config\x64\packages.config
 
     - script: |
         echo '##vso[task.setvariable variable=path]$(Build.BinariesDirectory)\python.3.9.10\tools;$(PATH)'
