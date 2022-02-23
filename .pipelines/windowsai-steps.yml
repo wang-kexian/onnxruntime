@@ -4,6 +4,14 @@ parameters:
 
 jobs:
 - job: Windows_Packaging_${{ parameters.BuildArch }}
+  pool:
+    type: windows  
+    
+  variables:
+    ob_outputDirectory: '$(REPOROOT)\out'
+    ob_sdl_binskim_break: true 
+    ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/master') }}:
+      ob_symbolsPublishing_enabled: true
   steps:
     - ${{ if eq(parameters.BuildArch, 'x64') }}:
       - task: NuGetCommand@2
