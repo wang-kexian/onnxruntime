@@ -37,6 +37,7 @@ extends:
       - template: .pipelines/windowsai-steps.yml@self
         parameters:
           BuildArch: x86
+          PythonPackageName: pythonx86
           
       - template: .pipelines/windowsai-steps.yml@self
         parameters:

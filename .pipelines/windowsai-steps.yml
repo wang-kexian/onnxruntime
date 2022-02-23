@@ -1,6 +1,7 @@
 parameters:
   BuildArch: 'x64'
   Runtime: 'dynamic'
+  PythonPackageName: python
 
 jobs:
 - job: Windows_Packaging_${{ parameters.BuildArch }}
@@ -12,8 +13,7 @@ jobs:
     ob_sdl_binskim_break: true 
     ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/master') }}:
       ob_symbolsPublishing_enabled: true
-  steps:
-    
+  steps:   
     - task: NuGetCommand@2
       displayName: 'NuGet restore'
       inputs:
@@ -29,18 +29,10 @@ jobs:
         ${{ if eq(parameters.BuildArch, 'arm64') }}:
           restoreSolution: $(Build.SourcesDirectory)\.pipelines\nuget_config\x64\packages.config
 
-    -${{ if eq(parameters.BuildArch, 'x64') }}:
-      - script: |
-        echo '##vso[task.setvariable variable=path]$(Build.BinariesDirectory)\python.3.7.9\tools;$(PATH)'
-    -${{ if eq(parameters.BuildArch, 'x86') }}:
-      - script: |
-        echo '##vso[task.setvariable variable=path]$(Build.BinariesDirectory)\pythonx86.3.7.9\tools;$(PATH)'
-    -${{ if eq(parameters.BuildArch, 'arm') }}:
-      - script: |
-        echo '##vso[task.setvariable variable=path]$(Build.BinariesDirectory)\python.3.7.9\tools;$(PATH)'
-    -${{ if eq(parameters.BuildArch, 'arm64') }}:
-      - script: |
-        echo '##vso[task.setvariable variable=path]$(Build.BinariesDirectory)\python.3.7.9\tools;$(PATH)'
+
+    - script: |
+        echo '##vso[task.setvariable variable=path]$(Build.BinariesDirectory)\${{ parameters.PythonPackageName }}.3.7.9\tools;$(PATH)'
+
 
     - script: |
         where python
