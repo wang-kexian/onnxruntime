@@ -41,7 +41,7 @@ extends:
             ob_symbolsPublishing_enabled: true
 
         steps:
-        - template: .pipelines/windowsai-steps.yaml@self
+        - template: .pipelines/windowsai-steps.yml@self
           parameters:
             BuildArch: x86
             
@@ -71,7 +71,7 @@ extends:
             ob_symbolsPublishing_enabled: true
 
         steps:
-        - template: .pipelines/windowsai-steps.yaml@self
+        - template: .pipelines/windowsai-steps.yml@self
           parameters:
             BuildArch: arm  
 
@@ -86,6 +86,6 @@ extends:
             ob_symbolsPublishing_enabled: true
 
         steps:
-        - template: .pipelines/windowsai-steps.yaml@self
+        - template: .pipelines/windowsai-steps.yml@self
           parameters:
             BuildArch: arm64
