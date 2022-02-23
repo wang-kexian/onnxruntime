@@ -30,7 +30,7 @@ jobs:
           restoreSolution: $(Build.SourcesDirectory)\.pipelines\nuget_config\x64\packages.config
 
     - script: |
-        echo '##vso[task.setvariable variable=path]$(Build.BinariesDirectory)\python.3.9.10\tools;$(PATH)'
+        echo '##vso[task.setvariable variable=path]$(Build.BinariesDirectory)\python.3.7.9\tools;$(PATH)'
     - script: |
         where python
     - script: |
