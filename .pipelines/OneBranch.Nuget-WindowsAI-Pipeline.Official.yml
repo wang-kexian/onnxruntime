@@ -22,7 +22,7 @@ extends:
       # credscan:
       #   suppressionsFile: $(Build.SourcesDirectory)\.config\CredScanSuppressions.json
       prefast:
-        enabled: true
+        enabled: false
       cg:
         failOnAlert: false
       policheck:
@@ -50,3 +50,24 @@ extends:
       - template: .pipelines/windowsai-steps.yml@self
         parameters:
           BuildArch: arm64
+          
+      - template: .pipelines/windowsai-steps.yml@self
+        parameters:
+          BuildArch: x64
+          Runtime: static
+          
+      - template: .pipelines/windowsai-steps.yml@self
+        parameters:
+          BuildArch: x86
+          PythonPackageName: pythonx86
+          Runtime: static
+          
+      - template: .pipelines/windowsai-steps.yml@self
+        parameters:
+          BuildArch: arm
+          Runtime: static
+          
+      - template: .pipelines/windowsai-steps.yml@self
+        parameters:
+          BuildArch: arm64
+          Runtime: static

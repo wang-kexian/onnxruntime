@@ -112,14 +112,14 @@ jobs:
           msbuild Microsoft.AI.MachineLearning.Interop.csproj /p:Configuration=RelWithDebInfo /p:Platform="Any CPU" /p:OnnxRuntimeBuildDirectory=$(Build.BinariesDirectory) -restore
         workingDirectory: '$(Build.SourcesDirectory)\csharp\src\Microsoft.AI.MachineLearning.Interop'
         displayName: 'Build Microsoft.AI.MachineLearning.Interop.dll'
-        
+
     - task: onebranch.pipeline.signing@1
       inputs:
         command: 'sign'
         signing_profile: 'external_distribution'
         files_to_sign: '**/*.exe;**/*.dll'
         search_root: '$(Build.BinariesDirectory)\RelWithDebInfo\RelWithDebInfo'
-        
+      displayName: 'Sign runtime DLLs'        
         
     - ${{ if eq(parameters.BuildArch, 'x64') }}:
       - script: |
@@ -156,3 +156,11 @@ jobs:
          copy $(Build.BinariesDirectory)\RelWithDebInfo\RelWithDebInfo\*.snupkg $(Build.ArtifactStagingDirectory)
         workingDirectory: '$(Build.SourcesDirectory)\csharp'
         displayName: 'Create NuGet Package'
+
+    - task: onebranch.pipeline.signing@1
+      inputs:
+        command: 'sign'
+        signing_profile: 'external_distribution'
+        files_to_sign: '**/*.exe;**/*.dll'
+        search_root: '$(Build.ArtifactStagingDirectory)\test_artifact'
+      displayName: 'Sign test_artifact'
