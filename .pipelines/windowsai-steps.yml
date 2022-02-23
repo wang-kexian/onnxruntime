@@ -13,13 +13,14 @@ jobs:
     ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/master') }}:
       ob_symbolsPublishing_enabled: true
   steps:
-    - ${{ if eq(parameters.BuildArch, 'x64') }}:
-      - task: NuGetCommand@2
-        displayName: 'NuGet restore'
-        inputs:
-          feedsToUse: config
-          nugetConfigPath: NuGet.config
-          restoreDirectory: '$(Build.BinariesDirectory)'
+    
+    - task: NuGetCommand@2
+      displayName: 'NuGet restore'
+      inputs:
+        feedsToUse: config
+        nugetConfigPath: NuGet.config
+        restoreDirectory: '$(Build.BinariesDirectory)'
+        ${{ if eq(parameters.BuildArch, 'x64') }}:
           restoreSolution: $(Build.BinariesDirectory)\.pipelines\nuget_config\x64\packages.config
 
 
