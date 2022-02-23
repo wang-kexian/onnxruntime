@@ -76,6 +76,9 @@ extends:
       - job: NuGet_Packaging
         pool:
           type: windows
+        variables:
+          ob_outputDirectory: '$(Build.ArtifactStagingDirectory)'
+          ob_sdl_binskim_break: false
         dependsOn:
         - Windows_Packaging_x64_dynamic
         - Windows_Packaging_x86_dynamic
